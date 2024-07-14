@@ -71,6 +71,8 @@ int totalSerialChars = 0;
 bool goodDataMode = false;
 long localChangeTime = 0;
 int requestNonJsonPinInfo = 1;
+int moxeeRebootCount = 0;
+long moxeeRebootTimes[] = {0,0,0,0,0,0,0,0,0,0,0};
 
 void setup() {
   Serial.begin(115200);
@@ -180,7 +182,7 @@ String weatherDataString(int sensor_id, int sensor_sub_type, int dataPin, int po
     if(powerPin > -1) {
       digitalWrite(powerPin, HIGH); //turn on sensor power. 
     }
-    delay(10);
+    //delay(10);
     double value = NULL;
     if(i2c){
       //i forget how we read a pin on an i2c slave. lemme see:
@@ -230,7 +232,7 @@ String weatherDataString(int sensor_id, int sensor_sub_type, int dataPin, int po
     if(powerPin > -1) {
       digitalWrite(powerPin, HIGH); //turn on DHT power, in case you're doing that. 
     }
-    delay(10);
+    //delay(10);
     humidityValue = (double)dht[objectCursor]->readHumidity();
     temperatureValue = (double)dht[objectCursor]->readTemperature();
     pressureValue = NULL; //really should set unknown values as null
@@ -328,7 +330,14 @@ void loop() {
   // send data only when you receive data:
   char incomingByte = ' ';
   String startValidIndication = "MB_real data,seg_cnt:3\r\r";
-
+  long nowTime = millis();
+  if(nowTime > 1000 * 86400 * 7 || nowTime < hotspot_limited_time_frame * 1000  && moxeeRebootCount >= number_of_hotspot_reboots_over_limited_timeframe_before_esp_reboot) {
+    feedbackSerial.print("MOXEE REBOOT COUNT: ");
+    feedbackSerial.print(moxeeRebootCount);
+    feedbackSerial.println();
+    rebootEsp();
+  }
+    
   if (Serial.available() > 0) {
     // read the incoming byte:
     incomingByte = Serial.read();
@@ -540,7 +549,7 @@ void sendRemoteData(String datastring){
   int attempts = 0;
   while(!clientGet.connect(host_get, httpGetPort) && attempts < connection_retry_number) {
     attempts++;
-    delay(200);
+    delay(20);
   }
 
   if (attempts >= connection_retry_number) {
@@ -574,7 +583,7 @@ void sendRemoteData(String datastring){
         return;
        } //if( millis() -  
      }
-    delay(1); //see if this improved data reception. OMG IT TOTALLY WORKED!!!
+    delay(4); //see if this improved data reception. OMG IT TOTALLY WORKED!!!
     bool receivedData = false;
     bool receivedDataJson = false;
     while(clientGet.available()){
@@ -765,13 +774,32 @@ void setLocalHardwareToServerStateFromNonJson(char * nonJsonLine){
   }
   pinTotal = foundPins;
 }
+
+
+///////////////////////////////////////////////
+void rebootEsp() {
+  Serial.println("Rebooting ESP");
+  ESP.restart();
+}
+
+void rebootMoxee() {  //moxee hotspot is so stupid that it has no watchdog.  so here i have a little algorithm to reboot it.
+  if(moxee_power_switch > -1) {
+    digitalWrite(moxee_power_switch, LOW);
+    delay(7000);
+    digitalWrite(moxee_power_switch, HIGH);
+  }
+  //only do one reboot!  it usually takes two, but this thing can be made to cycle so fast that this same function can handle both reboots, which is important if the reboot happens to 
+  //be out of phase with the cellular hotspot
+  shiftArrayUp(moxeeRebootTimes,  millis(), 10);
+  moxeeRebootCount++;
+}
 //////////////////////////////////////////////
 long getPinValueOnSlave(char i2cAddress, char pinNumber) { //might want a user-friendlier API here
   //reading an analog or digital value from the slave:
   Wire.beginTransmission(i2cAddress);
   Wire.write(pinNumber); //addresses greater than 64 are the same as AX (AnalogX) where X is 64-value
   Wire.endTransmission();
-  delay(100); 
+  //delay(100); 
   Wire.requestFrom(i2cAddress, 4); //we only ever get back four-byte long ints
   long totalValue = 0;
   int byteCursor = 1;
