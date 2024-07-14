@@ -14,12 +14,37 @@
 
 
 #include "config.h"
+
+#include "Zanshin_BME680.h"  // Include the BME680 Sensor library
+#include <DHT.h>
+#include <SFE_BMP180.h>
+#include <Adafruit_BMP085.h>
+#include <Temperature_LM75_Derived.h>
+#include <Adafruit_BMP280.h>
+#include <Wire.h>
+
+
+#include "index.h" //Our HTML webpage contents with javascriptrons
+
+
+//i created 12 of each sensor object in case we added lots more sensors via device_features
+//amusingly, this barely ate into memory at all
+//since many I2C sensors only permit two sensors per I2C bus, you could reduce the size of these object arrays
+//and so i've dropped some of these down to 2
+DHT* dht[6];
+SFE_BMP180 BMP180[2];
+BME680_Class BME680[2];
+Adafruit_BMP085 BMP085d[2];
+Generic_LM75 LM75[12];
+Adafruit_BMP280 BMP280[2];
+
+
 String serialContent = "";
 String ipAddress;
 String goodData;
 String dataToDisplay;
 String deviceName = "Your device";
-long lastDataLogTime;
+long lastDataLogTime = 0;
 long connectionFailureTime;
 bool connectionFailureMode = false;
 ESP8266WebServer server(80); //Server on port 80
@@ -35,9 +60,17 @@ SimpleMap<String, int> *pinMap = new SimpleMap<String, int>([](String &a, String
   else if (a > b) return 1;  // a is bigger than b
   else return -1;            // a is smaller than b
 });
-int totalSerialChars = 0;
+SimpleMap<String, int> *sensorObjectCursor = new SimpleMap<String, int>([](String &a, String &b) -> int {
+  if (a == b) return 0;      // a and b are equal
+  else if (a > b) return 1;  // a is bigger than b
+  else return -1;            // a is smaller than b
+});
+bool glblRemote = false;
 
+int totalSerialChars = 0;
 bool goodDataMode = false;
+long localChangeTime = 0;
+int requestNonJsonPinInfo = 1;
 
 void setup() {
   Serial.begin(115200);
@@ -52,14 +85,227 @@ void setup() {
   Wire.begin();
   delay(2000);
   server.on("/energy", handleInverterData);
+  server.on("/", handleRoot);      //Displays a form where devices can be turned on and off and the outputs of sensors
+  server.on("/readLocalData", localShowData);
+  server.on("/weatherdata", handleWeatherData); //This page is called by java Script AJAX
+  server.on("/writeLocalData", localSetData);
   server.begin();
-  
+  startWeatherSensors(sensor_id, sensor_sub_type, sensor_i2c, sensor_data_pin, sensor_power_pin);
   
   Serial.println("about to swap");
   delay(4000);
   Serial.swap();
   feedbackSerial.begin(115200);
   
+}
+
+void startWeatherSensors(int sensorIdLocal, int sensorSubTypeLocal, int i2c, int pinNumber, int powerPin) {
+  //i've made all these inputs generic across different sensors, though for now some apply and others do not on some sensors
+  //for example, you can set the i2c address of a BME680 or a BMP280 but not a BMP180.  you can specify any GPIO as a data pin for a DHT
+  int objectCursor = 0;
+  if(sensorObjectCursor->has((String)sensor_id)) {
+    objectCursor = sensorObjectCursor->get((String)sensorIdLocal);;
+  } 
+  if(sensorIdLocal == 1) { //simple analog input
+    //all we need to do is turn on power to whatever the analog device is
+    if(powerPin > -1) {
+      pinMode(powerPin, OUTPUT);
+      digitalWrite(powerPin, LOW);
+    }
+  } else if(sensorIdLocal == 680) {
+    Serial.print(F("Initializing BME680 sensor...\n"));
+    while (!BME680[objectCursor].begin(I2C_STANDARD_MODE, i2c)) {  // Start B DHTME680 using I2C, use first device found
+      Serial.print(F(" - Unable to find BME680. Trying again in 5 seconds.\n"));
+      delay(5000);
+    }  // of loop until device is located
+    Serial.print(F("- Setting 16x oversampling for all sensors\n"));
+    BME680[objectCursor].setOversampling(TemperatureSensor, Oversample16);  // Use enumerated type values
+    BME680[objectCursor].setOversampling(HumiditySensor, Oversample16);     // Use enumerated type values
+    BME680[objectCursor].setOversampling(PressureSensor, Oversample16);     // Use enumerated type values
+    //Serial.print(F("- Setting IIR filter to a value of 4 samples\n"));
+    BME680[objectCursor].setIIRFilter(IIR4);  // Use enumerated type values
+    //Serial.print(F("- Setting gas measurement to 320\xC2\xB0\x43 for 150ms\n"));  // "�C" symbols
+    BME680[objectCursor].setGas(320, 150);  // 320�c for 150 milliseconds
+  } else if (sensorIdLocal == 2301) {
+    Serial.print(F("Initializing DHT AM2301 sensor at pin: "));
+    if(powerPin > -1) {
+      pinMode(powerPin, OUTPUT);
+      digitalWrite(powerPin, LOW);
+    }
+    dht[objectCursor] = new DHT(pinNumber, sensorSubTypeLocal);
+    dht[objectCursor]->begin();
+  } else if (sensorIdLocal == 180) { //BMP180
+    BMP180[objectCursor].begin();
+  } else if (sensorIdLocal == 85) { //BMP085
+    Serial.print(F("Initializing BMP085...\n"));
+    BMP085d[objectCursor].begin();
+  } else if (sensorIdLocal == 280) {
+    Serial.print("Initializing BMP280 at i2c: ");
+    Serial.print((int)i2c);
+    Serial.print(" objectcursor:");
+    Serial.print((int)objectCursor);
+    Serial.println();
+    if(!BMP280[objectCursor].begin(i2c)){
+      Serial.println("Couldn't find BMX280!");
+    }
+  }
+  sensorObjectCursor->put((String)sensorIdLocal, objectCursor + 1); //we keep track of how many of a particular sensor_id we use
+}
+
+
+//returns a "*"-delimited string containing weather data, starting with temperature and ending with deviceFeatureId,    a url-encoded sensorName, and consolidateAllSensorsToOneRecord
+//we might send multiple-such strings (separated by "!") to the backend for multiple sensors on an ESP8266
+//i've made this to handle all the weather sensors i have so i can mix and match, though of course there are many others
+String weatherDataString(int sensor_id, int sensor_sub_type, int dataPin, int powerPin, int i2c, int deviceFeatureId, char objectCursor, String sensorName,  int consolidateAllSensorsToOneRecord) {
+  double humidityValue = NULL;
+  double temperatureValue = NULL;
+  double pressureValue = NULL;
+  double gasValue = NULL;
+  int32_t humidityRaw = NULL;
+  int32_t temperatureRaw = NULL;
+  int32_t pressureRaw = NULL;
+  int32_t gasRaw = NULL;
+  int32_t alt  = NULL;
+  static char buf[16];
+  static uint16_t loopCounter = 0;  
+  String transmissionString = "";
+  if(glblRemote) {
+    sensorName = urlEncode(sensorName);
+  }
+  if(deviceFeatureId == NULL) {
+    objectCursor = 0;
+  }
+  if(sensor_id == 1) { //simple analog input. we can use subType to decide what kind of sensor it is!
+    //an even smarter system would somehow be able to put together multiple analogReads here
+    if(powerPin > -1) {
+      digitalWrite(powerPin, HIGH); //turn on sensor power. 
+    }
+    delay(10);
+    double value = NULL;
+    if(i2c){
+      //i forget how we read a pin on an i2c slave. lemme see:
+      value = (double)getPinValueOnSlave((char)i2c, (char)dataPin);
+    } else {
+      value = (double)analogRead(dataPin);
+    }
+    for(char i=0; i<12; i++){ //we have 12 separate possible sensor functions:
+      //temperature*pressure*humidity*gas*windDirection*windSpeed*windIncrement*precipitation*reserved1*reserved2*reserved3*reserved4
+      //if you have some particular sensor communicating through a pin and want it to be one of these
+      //you set sensor_sub_type to be the 0-based value in that *-delimited string
+      //i'm thinking i don't bother defining the reserved ones and just let them be application-specific and different in different implementations
+      //a good one would be radioactive counts per unit time
+      if((int)i == sensor_sub_type) {
+        transmissionString = transmissionString + nullifyOrNumber(value);
+      }
+      transmissionString = transmissionString + "*";
+    }
+    //note, if temperature ends up being NULL, the record won't save. might want to tweak data.php to save records if it contains SOME data
+    
+    if(powerPin > -1) {
+      digitalWrite(powerPin, LOW);
+    }
+    
+  } else if (sensor_id == 680) { //this is the primo sensor chip, so the trouble is worth it
+    //BME680 code:
+    BME680[objectCursor].getSensorData(temperatureRaw, humidityRaw, pressureRaw, gasRaw);
+    //i'm not sure what all this is about, since i just copied it from the BME680 example:
+    sprintf(buf, "%4d %3d.%02d", (loopCounter - 1) % 9999,  // Clamp to 9999,
+            (int8_t)(temperatureRaw / 100), (uint8_t)(temperatureRaw % 100));   // Temp in decidegrees
+    //Serial.print(buf);
+    sprintf(buf, "%3d.%03d", (int8_t)(humidityRaw / 1000),
+            (uint16_t)(humidityRaw % 1000));  // Humidity milli-pct
+    //Serial.print(buf);
+    sprintf(buf, "%7d.%02d", (int16_t)(pressureRaw / 100),
+            (uint8_t)(pressureRaw % 100));  // Pressure Pascals
+    //Serial.print(buf);                                     
+ 
+    //Serial.print(buf);
+    sprintf(buf, "%4d.%02d\n", (int16_t)(gasRaw / 100), (uint8_t)(gasRaw % 100));  // Resistance milliohms
+    //Serial.print(buf);
+    humidityValue = (double)humidityRaw/1000;
+    temperatureValue = (double)temperatureRaw/100;
+    pressureValue = (double)pressureRaw/100;
+    gasValue = (double)gasRaw/100;  //all i ever get for this is 129468.6 and 8083.7
+  } else if (sensor_id == 2301) { //i love the humble DHT
+    if(powerPin > -1) {
+      digitalWrite(powerPin, HIGH); //turn on DHT power, in case you're doing that. 
+    }
+    delay(10);
+    humidityValue = (double)dht[objectCursor]->readHumidity();
+    temperatureValue = (double)dht[objectCursor]->readTemperature();
+    pressureValue = NULL; //really should set unknown values as null
+    if(powerPin > -1) {
+      digitalWrite(powerPin, LOW);//turn off DHT power. maybe it saves energy, and that's why MySpool did it this way
+    }
+  } else if(sensor_id == 280) {
+    humidityValue = NULL;
+    temperatureValue = BMP280[objectCursor].readTemperature();
+    pressureValue = BMP280[objectCursor].readPressure()/100;
+  } else if(sensor_id == 180) { //so much trouble for a not-very-good sensor 
+    //BMP180 code:
+    char status;
+    double p0,a;
+    status = BMP180[objectCursor].startTemperature();
+    if (status != 0)
+    {
+      // Wait for the measurement to complete:
+      delay(status);   
+      // Retrieve the completed temperature measurement:
+      // Note that the measurement is stored in the variable T.
+      // Function returns 1 if successful, 0 if failure.
+      status = BMP180[objectCursor].getTemperature(temperatureValue);
+      if (status != 0)
+      {
+        status = BMP180[objectCursor].startPressure(3);
+        if (status != 0)
+        {
+          // Wait for the measurement to complete:
+          delay(status);
+          // Retrieve the completed pressure measurement:
+          // Note that the measurement is stored in the variable P.
+          // Note also that the function requires the previous temperature measurement (temperatureValue).
+          // (If temperature is stable, you can do one temperature measurement for a number of pressure measurements.)
+          // Function returns 1 if successful, 0 if failure.
+          status = BMP180[objectCursor].getPressure(pressureValue,temperatureValue);
+          if (status == 0) {
+            Serial.println("error retrieving pressure measurement\n");
+          }
+        } else {
+          Serial.println("error starting pressure measurement\n");
+        }
+      } else {
+        Serial.println("error retrieving temperature measurement\n");
+      }
+    } else {
+      Serial.println("error starting temperature measurement\n");
+    }
+    humidityValue = NULL; //really should set unknown values as null
+  } else if (sensor_id == 85) {
+    //https://github.com/adafruit/Adafruit-BMP085-Library
+    temperatureValue = BMP085d[objectCursor].readTemperature();
+    pressureValue = BMP085d[objectCursor].readPressure()/100; //to get millibars!
+    humidityValue = NULL; //really should set unknown values as null
+  } else if (sensor_id == 75) { //LM75, so ghetto
+    //https://electropeak.com/learn/interfacing-lm75-temperature-sensor-with-arduino/
+    temperatureValue = LM75[objectCursor].readTemperatureC();
+    pressureValue = NULL;
+    humidityValue = NULL;
+  } else { //either sensor_id is NULL or 0
+    //no sensor at all
+    temperatureValue = NULL;//don't want to save a record in weather_data from an absent sensor, so force temperature NULL
+    pressureValue = NULL;
+    humidityValue = NULL;
+  }
+  //
+  if(sensor_id > 1) {
+    transmissionString = nullifyOrNumber(temperatureValue) + "*" + nullifyOrNumber(pressureValue);
+    transmissionString = transmissionString + "*" + nullifyOrNumber(humidityValue);
+    transmissionString = transmissionString + "*" + nullifyOrNumber(gasValue);
+    transmissionString = transmissionString + "*********"; //for esoteric weather sensors that measure wind and precipitation.  the last four are reserved for now
+  }
+  //using delimited data instead of JSON to keep things simple
+  transmissionString = transmissionString + nullifyOrInt(sensor_id) + "*" + nullifyOrInt(deviceFeatureId) + "*" + sensorName + "*" + nullifyOrInt(consolidateAllSensorsToOneRecord); 
+  return transmissionString;
 }
 
 void postData(String datastring){
@@ -95,9 +341,23 @@ void loop() {
       serialContent = "";
     }
     if(goodDataMode) {
+      if(ipAddress.indexOf(' ') > 0) { //i was getting HTML header info mixed in for some reason
+        ipAddress = ipAddress.substring(0, ipAddress.indexOf(' '));
+      }
       if (incomingByte == '\r'){
         //dataToDisplay = goodData;
         dataToDisplay =  parseData(goodData);
+        if(millis() - lastDataLogTime > data_logging_granularity * 1000) {
+          if(sensor_id > -1) {
+            String weatherData = weatherDataString(sensor_id, sensor_sub_type, sensor_data_pin, sensor_power_pin, sensor_i2c, NULL, 0, deviceName, consolidate_all_sensors_to_one_record);
+            dataToDisplay += "!" +  weatherData;
+            String additionalSensorData = handleDeviceNameAndAdditionalSensors((char *)additionalSensorInfo.c_str(), false);
+            dataToDisplay +=  additionalSensorData;
+            lastDataLogTime = millis();
+          }
+        }
+        dataToDisplay += "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|***" + ipAddress + "*" + requestNonJsonPinInfo + "*0";
+        feedbackSerial.println(dataToDisplay);
         sendRemoteData(dataToDisplay);
         goodData = "";
         goodDataMode = false;
@@ -117,6 +377,60 @@ void loop() {
     server.handleClient();
   }
 
+}
+
+
+//this is the easiest way I could find to read querystring parameters on an ESP8266. ChatGPT was suprisingly unhelpful
+void localSetData() {
+  localChangeTime = millis();
+  String id = "";
+  int onValue = 0;
+  for (int i = 0; i < server.args(); i++) {
+    if(server.argName(i) == "id") {
+      id = server.arg(i);
+      Serial.print(id);
+      Serial.print( " : ");
+    } else if (server.argName(i) == "on") {
+      onValue = (int)(server.arg(i) == "1");  
+    }
+    Serial.print(onValue);
+    Serial.println();
+  } 
+  for (int i = 0; i < pinMap->size(); i++) {
+    String key = pinList[i];
+    Serial.print(key);
+    Serial.print(" ?= ");
+    Serial.println(id);
+    if(key == id) {
+      pinMap->remove(key);
+      pinMap->put(key, onValue);
+      Serial.print("LOCAL SOURCE TRUE :");
+      Serial.println(onValue);
+      localSource = true; //sets the NodeMCU into a mode it cannot get out of until the server sends back confirmation it got the data
+    }
+  }
+  server.send(200, "text/plain", "Data received");
+}
+
+void localShowData() {
+  if(millis() - localChangeTime < 1000) {
+    return;
+  }
+  String out = "{\"device\":\"" + deviceName + "\", \"pins\": [";
+  for (int i = 0; i < pinMap->size(); i++) {
+    out = out + "{\"id\": \"" + pinList[i] +  "\",\"name\": \"" + pinName[i] +  "\", \"value\": \"" + (String)pinMap->getData(i) + "\"}";
+    if(i < pinMap->size()-1) {
+      out = out + ", ";
+    }
+  }
+  out += "]}";
+  server.send(200, "text/plain", out); 
+}
+
+
+void handleRoot() {
+ String s = MAIN_page; //Read HTML contents
+ server.send(200, "text/html", s); //Send web page
 }
 
 void handleInverterData() {
@@ -172,9 +486,7 @@ int generateDecimalFromStringPositions(String inData, int start, int stop) {
 }
 
 String parseData(String inData){
-  if(ipAddress.indexOf(' ') > 0) { //i was getting HTML header info mixed in for some reason
-    ipAddress = ipAddress.substring(0, ipAddress.indexOf(' '));
-  }
+
   int firstChanger = generateDecimalFromStringPositions(inData, 7, 13);
   int secondChanger = generateDecimalFromStringPositions(inData, 25, 31);
   int thirdChanger = generateDecimalFromStringPositions(inData, 67, 73);
@@ -204,7 +516,7 @@ String parseData(String inData){
   out += "*" + (String)fifthChanger;
   out += "*" + (String)sixthChanger;
   out += "*" + (String)seventhChanger;
-  out += "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|***" + ipAddress + "*1*0";
+  
   //feedbackSerial.println(out);
   return out;
 }
@@ -291,7 +603,7 @@ void sendRemoteData(String datastring){
         }
         additionalSensorInfo = retLine;
         //once we have it
-        //handleDeviceNameAndAdditionalSensors((char *)additionalSensorInfo.c_str(), true);
+        handleDeviceNameAndAdditionalSensors((char *)additionalSensorInfo.c_str(), true);
         break;
       } else if(retLine.charAt(0) == '*') { //getInitialDeviceInfo
         //set the global string; we'll just use that to store our data about addtional sensors
@@ -303,7 +615,7 @@ void sendRemoteData(String datastring){
         */
         //additionalSensorInfo = retLine;
         //once we have it
-        //handleDeviceNameAndAdditionalSensors((char *)additionalSensorInfo.c_str(), true);
+        handleDeviceNameAndAdditionalSensors((char *)additionalSensorInfo.c_str(), true);
         break;
       } else if(retLine.charAt(0) == '{') { //we don't handle JSON so no need for this
         //setLocalHardwareToServerStateFromJson((char *)retLine.c_str());
@@ -321,6 +633,62 @@ void sendRemoteData(String datastring){
   clientGet.stop();
 }
 
+
+String handleDeviceNameAndAdditionalSensors(char * sensorData, bool intialize){
+  String additionalSensorArray[12];
+  String specificSensorData[8];
+  int i2c;
+  int pinNumber;
+  int powerPin;
+  int sensorIdLocal;
+  int sensorSubTypeLocal;
+  int deviceFeatureId;
+  int consolidateAllSensorsToOneRecord = 0;
+  String out = "";
+  int objectCursor = 0;
+  int oldsensor_id = -1;
+  String sensorName;
+  splitString(sensorData, '|', additionalSensorArray, 12);
+  deviceName = additionalSensorArray[0].substring(1);
+  requestNonJsonPinInfo = 1; //set this global
+  for(int i=1; i<12; i++) {
+    String sensorDatum = additionalSensorArray[i];
+    if(sensorDatum.indexOf('*')>-1) {
+      splitString(sensorDatum, '*', specificSensorData, 8);
+      pinNumber = specificSensorData[0].toInt();
+      powerPin = specificSensorData[1].toInt();
+      sensorIdLocal = specificSensorData[2].toInt();
+      sensorSubTypeLocal = specificSensorData[3].toInt();
+      i2c = specificSensorData[4].toInt();
+      deviceFeatureId = specificSensorData[5].toInt();
+      sensorName = specificSensorData[6];
+      consolidateAllSensorsToOneRecord = specificSensorData[7].toInt();
+      if(oldsensor_id != sensorIdLocal) { //they're sorted by sensor_id, so the objectCursor needs to be set to zero if we're seeing the first of its type
+        objectCursor = 0;
+      }
+      if(sensorIdLocal == sensor_id) { //this particular additional sensor is the same type as the base (non-additional) sensor, so we have to pre-start it higher
+        objectCursor++;
+      }
+      if(intialize) {
+        startWeatherSensors(sensorIdLocal, sensorSubTypeLocal, i2c, pinNumber, powerPin); //guess i have to pass all this additional info
+      } else {
+        //otherwise do a weatherDataString
+        out = out + "!" + weatherDataString(sensorIdLocal, sensorSubTypeLocal, pinNumber, powerPin, i2c, deviceFeatureId, objectCursor, sensorName, consolidateAllSensorsToOneRecord);
+      }
+      objectCursor++;
+      oldsensor_id = sensorIdLocal;
+    }
+  }
+ return out;
+}
+
+void handleWeatherData() {
+  String transmissionString;
+  if(sensor_id > -1) {
+    transmissionString = weatherDataString(sensor_id, sensor_sub_type, sensor_data_pin, sensor_power_pin, sensor_i2c, NULL, 0, deviceName, consolidate_all_sensors_to_one_record);
+  }
+  server.send(200, "text/plain", transmissionString); //Send values only to client ajax request
+}
 
 //if the backend sends too much text data at once, it is likely to get gzipped, which is hard to deal with on a microcontroller with limited resources
 //so a better strategy is to send double-delimited data instead of JSON, with data consistently in known ordinal positions
