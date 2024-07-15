@@ -43,7 +43,7 @@ String serialContent = "";
 String ipAddress;
 String goodData;
 String dataToDisplay;
-String deviceName = "Your device";
+String deviceName = "";
 long lastDataLogTime = 0;
 long connectionFailureTime;
 bool connectionFailureMode = false;
@@ -425,7 +425,11 @@ void localShowData() {
   if(millis() - localChangeTime < 1000) {
     return;
   }
-  String out = "{\"device\":\"" + deviceName + "\", \"pins\": [";
+  String deviceNameToUse = deviceName;
+  if(deviceNameToUse == "") {
+    deviceNameToUse = "Your Device";
+  }
+  String out = "{\"device\":\"" + deviceNameToUse + "\", \"pins\": [";
   for (int i = 0; i < pinMap->size(); i++) {
     out = out + "{\"id\": \"" + pinList[i] +  "\",\"name\": \"" + pinName[i] +  "\", \"value\": \"" + (String)pinMap->getData(i) + "\"}";
     if(i < pinMap->size()-1) {
@@ -539,8 +543,6 @@ void sendRemoteData(String datastring){
   //most of the time we want to getDeviceData, not saveData. the former picks up remote control activity. the latter sends sensor data
   postData(datastring + "\n" + goodData);
   mode = "saveLocallyGatheredSolarData";
-  lastDataLogTime = millis();
- 
   if(deviceName == "") {
     mode = "getInitialDeviceInfo";
   }
@@ -644,6 +646,7 @@ void sendRemoteData(String datastring){
 
 
 String handleDeviceNameAndAdditionalSensors(char * sensorData, bool intialize){
+  feedbackSerial.println(sensorData);
   String additionalSensorArray[12];
   String specificSensorData[8];
   int i2c;
