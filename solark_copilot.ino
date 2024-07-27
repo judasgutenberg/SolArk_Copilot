@@ -508,7 +508,7 @@ int generateDecimalFromStringPositions(String inData, int start, int stop) {
 }
 
 String parseData(String inData){
-
+  //mysteryValues and changers are values whose meanings I haven't yet determined. i log them on the backend and try to figure them out by context
   int firstChanger = generateDecimalFromStringPositions(inData, 7, 13);
   int secondChanger = generateDecimalFromStringPositions(inData, 25, 31);
   int thirdChanger = generateDecimalFromStringPositions(inData, 67, 73);
@@ -525,11 +525,11 @@ String parseData(String inData){
   int batteryPower = generateDecimalFromStringPositions(inData, 637, 643);
   int gridPower = generateDecimalFromStringPositions(inData, 121, 127);
   int batteryVoltage = generateDecimalFromStringPositions(inData, 595, 601);
-  int solPotential = generateDecimalFromStringPositions(inData, 643, 649);
+  int mysteryValue3 = generateDecimalFromStringPositions(inData, 643, 649);
   //1st is gridPower, 2nd is batteryPercentage, 3rd loadPower, 4th is battery power  (2's complement for negative), 5th and 6th are solar strings
   String out = (String)millis() + "*" + String(gridPower) + "*" + String(batteryPercent) + "*" + String(batteryPower) + "*" + String(loadPower) + "*" + String(solarString1) + "*" + (String)solarString2;
   out += "*" + (String)batteryVoltage;
-  out += "*" + (String)solPotential;
+  out += "*" + (String)mysteryValue3;
   out += "*" + (String)mysteryValue1 + "*" + (String)mysteryValue2;
   out += "*" + (String)firstChanger;
   out += "*" + (String)secondChanger;
