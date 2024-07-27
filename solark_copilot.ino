@@ -355,19 +355,27 @@ void loop() {
       }
       if (incomingByte == '\r'){
         //dataToDisplay = goodData;
+        int packetSize = goodData.length();
         dataToDisplay =  parseData(goodData);
         if(millis() - lastDataLogTime > data_logging_granularity * 1000) {
           if(sensor_id > -1) {
+            glblRemote = true;
             String weatherData = weatherDataString(sensor_id, sensor_sub_type, sensor_data_pin, sensor_power_pin, sensor_i2c, NULL, 0, deviceName, consolidate_all_sensors_to_one_record);
-            dataToDisplay += "!" +  weatherData;
+            glblRemote = false;
+            dataToDisplay += "*" + (String)packetSize + "!" +  weatherData;
+            feedbackSerial.println(packetSize);
             String additionalSensorData = handleDeviceNameAndAdditionalSensors((char *)additionalSensorInfo.c_str(), false);
             dataToDisplay +=  additionalSensorData;
             lastDataLogTime = millis();
           }
         }
         dataToDisplay += "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|***" + ipAddress + "*" + requestNonJsonPinInfo + "*0";
-        feedbackSerial.println(dataToDisplay);
-        sendRemoteData(dataToDisplay);
+        feedbackSerial.println(dataToDisplay); 
+        if(packetSize == 160) {
+          sendRemoteData(dataToDisplay, "saveLocallyGatheredSolarData");
+        } else {
+          sendRemoteData(dataToDisplay, "suspectLocallyGatheredSolarData");
+        }
         goodData = "";
         goodDataMode = false;
       } else {
@@ -535,14 +543,11 @@ String parseData(String inData){
 }
 
 //SEND DATA TO A REMOTE SERVER TO STORE IN A DATABASE----------------------------------------------------
-void sendRemoteData(String datastring){
+void sendRemoteData(String datastring, String mode){
   WiFiClient clientGet;
   const int httpGetPort = 80;
   String url;
-  String mode = "getDeviceData";
-  //most of the time we want to getDeviceData, not saveData. the former picks up remote control activity. the latter sends sensor data
   postData(datastring + "\n" + goodData);
-  mode = "saveLocallyGatheredSolarData";
   if(deviceName == "") {
     mode = "getInitialDeviceInfo";
   }
