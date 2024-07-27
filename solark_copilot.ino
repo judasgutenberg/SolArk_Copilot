@@ -356,22 +356,23 @@ void loop() {
       if (incomingByte == '\r'){
         //dataToDisplay = goodData;
         int packetSize = goodData.length();
-        dataToDisplay =  parseData(goodData);
+        dataToDisplay =  parseData(goodData) + "*" + (String)packetSize;
         if(millis() - lastDataLogTime > data_logging_granularity * 1000) {
           if(sensor_id > -1) {
             glblRemote = true;
             String weatherData = weatherDataString(sensor_id, sensor_sub_type, sensor_data_pin, sensor_power_pin, sensor_i2c, NULL, 0, deviceName, consolidate_all_sensors_to_one_record);
             glblRemote = false;
-            dataToDisplay += "*" + (String)packetSize + "!" +  weatherData;
-            feedbackSerial.println(packetSize);
+            dataToDisplay += "!" +  weatherData;
+            
             String additionalSensorData = handleDeviceNameAndAdditionalSensors((char *)additionalSensorInfo.c_str(), false);
             dataToDisplay +=  additionalSensorData;
             lastDataLogTime = millis();
           }
         }
         dataToDisplay += "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|***" + ipAddress + "*" + requestNonJsonPinInfo + "*0";
+        feedbackSerial.println(packetSize);
         feedbackSerial.println(dataToDisplay); 
-        if(packetSize == 160) {
+        if(packetSize == 745) {
           sendRemoteData(dataToDisplay, "saveLocallyGatheredSolarData");
         } else {
           sendRemoteData(dataToDisplay, "suspectLocallyGatheredSolarData");
