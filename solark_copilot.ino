@@ -41,6 +41,8 @@ Adafruit_BMP280 BMP280[2];
 
 String serialContent = "";
 String ipAddress;
+String ipAddressAffectingChange;
+int changeSourceId = 0;
 String goodData;
 String dataToDisplay;
 String deviceName = "";
@@ -369,7 +371,13 @@ void loop() {
             lastDataLogTime = millis();
           }
         }
-        dataToDisplay += "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|***" + ipAddress + "*" + requestNonJsonPinInfo + "*0";
+
+        if(ipAddressAffectingChange != "") {
+           ipAddressToUse = ipAddressAffectingChange;
+           changeSourceId = 1;
+        }
+        
+        dataToDisplay += "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|***" + ipAddress + "*" + requestNonJsonPinInfo + "*0*" + changeSourceId;
         feedbackSerial.println(packetSize);
         feedbackSerial.println(dataToDisplay); 
         if(packetSize == 745) {
@@ -594,6 +602,10 @@ void sendRemoteData(String datastring, String mode){
     delay(4); //see if this improved data reception. OMG IT TOTALLY WORKED!!!
     bool receivedData = false;
     bool receivedDataJson = false;
+    if(clientGet.available() && ipAddressAffectingChange != "") { //don't turn these globals off until we have data back from the server
+       ipAddressAffectingChange = "";
+       changeSourceId = 0;
+    }
     while(clientGet.available()){
       receivedData = true;
       String retLine = clientGet.readStringUntil('\n');
