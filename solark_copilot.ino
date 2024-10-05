@@ -333,6 +333,11 @@ void loop() {
   char incomingByte = ' ';
   String startValidIndication = "MB_real data,seg_cnt:3\r\r";
   long nowTime = millis();
+  if(!goodDataMode) {
+    for(int i=0; i <4; i++) { //doing this four times here is helpful to make web service reasonably responsive. once is not enough
+      server.handleClient();
+    }
+  }
   if(nowTime > 1000 * 86400 * 7 || nowTime < hotspot_limited_time_frame * 1000  && moxeeRebootCount >= number_of_hotspot_reboots_over_limited_timeframe_before_esp_reboot) {
     feedbackSerial.print("MOXEE REBOOT COUNT: ");
     feedbackSerial.print(moxeeRebootCount);
@@ -371,7 +376,7 @@ void loop() {
             lastDataLogTime = millis();
           }
         }
-
+        String ipAddressToUse = ipAddress;
         if(ipAddressAffectingChange != "") {
            ipAddressToUse = ipAddressAffectingChange;
            changeSourceId = 1;
@@ -399,9 +404,7 @@ void loop() {
       goodDataMode = true;   
     }
   }
-  if(!goodDataMode) {
-    server.handleClient();
-  }
+
 
 }
 
