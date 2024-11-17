@@ -3,7 +3,7 @@ This device is designed to connect to the serial port of the WiFi dongle attache
 ![alt text](dongle_serial.jpg?raw=true)
 
 In addition to being able to monitor a SolArk inverter via serial, it can also turn devices on and off via changes to pin state and regularly report weather data collected via sensors in the same way as the ESP8266s in my ESP8266 Remote Control system.
-Since this device has the ability to control devices, the plan is to use it to turn on a nearby Generac generator and perhaps also send signals to the SolArk inverter itself (assuming this can be done).
+Since this device has the ability to control devices, I use it to remotely turn on a nearby Generac generator. Perhaps I can use it to send signals to the SolArk inverter itself (assuming this can be done).
 
 For a backend, this device uses the same one used by the ESP Remote.  See:
 
