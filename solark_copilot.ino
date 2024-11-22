@@ -473,6 +473,7 @@ void handleInverterData() {
 
 
 void wiFiConnect() {
+  WiFi.persistent(false); //hopefully keeps my flash from being corrupted, see: https://rayshobby.net/wordpress/esp8266-reboot-cycled-caused-by-flash-memory-corruption-fixed/
   WiFi.begin(wifi_ssid, wifi_password);     //Connect to your WiFi router
   Serial.println();
   // Wait for connection
