@@ -8,3 +8,4 @@ extern const char* host_get;
 extern const int device_id;
 extern const int connection_failure_retry_seconds;
 extern const int connection_retry_number;
+extern const int ir_pin; 
