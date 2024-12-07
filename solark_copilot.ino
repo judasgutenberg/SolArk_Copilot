@@ -384,7 +384,7 @@ void loop() {
            changeSourceId = 1;
         }
         
-        dataToDisplay += "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|***" + ipAddressToUse + "*" + requestNonJsonPinInfo + "*1*" + changeSourceId;
+        dataToDisplay += "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|" + (int)lastCommandId + "***" + ipAddressToUse + "*" + requestNonJsonPinInfo + "*1*" + changeSourceId;
         feedbackSerial.println(packetSize);
         feedbackSerial.println(dataToDisplay); 
         if(packetSize == 745) {
