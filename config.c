@@ -9,3 +9,5 @@ const char* host_get = "randomsprocket.com";
 const int device_id = 16;
 const int connection_failure_retry_seconds = 4;
 const int connection_retry_number = 22;
+
+const int ir_pin = 14; //set to the value of an actual data pin if you want to send data via ir from your controller on occasi
