@@ -8,7 +8,8 @@
 #include <ESP8266HTTPClient.h>
 #include <Wire.h>
 #include <SoftwareSerial.h>
-
+#include <IRremoteESP8266.h>
+#include <IRsend.h>
 
 #include <SimpleMap.h>
 
@@ -37,7 +38,7 @@ BME680_Class BME680[2];
 Adafruit_BMP085 BMP085d[2];
 Generic_LM75 LM75[12];
 Adafruit_BMP280 BMP280[2];
-
+IRsend irsend(ir_pin);
 
 String serialContent = "";
 String ipAddress;
@@ -51,6 +52,7 @@ long connectionFailureTime;
 bool connectionFailureMode = false;
 ESP8266WebServer server(80); //Server on port 80
 SoftwareSerial feedbackSerial(3, 1);
+long lastCommandId = 0;
 
 String additionalSensorInfo; //we keep it stored in a delimited string just the way it came from the server and unpack it periodically to get the data necessary to read sensors
 int pinTotal = 12;
@@ -128,8 +130,8 @@ void startWeatherSensors(int sensorIdLocal, int sensorSubTypeLocal, int i2c, int
     BME680[objectCursor].setOversampling(PressureSensor, Oversample16);     // Use enumerated type values
     //Serial.print(F("- Setting IIR filter to a value of 4 samples\n"));
     BME680[objectCursor].setIIRFilter(IIR4);  // Use enumerated type values
-    //Serial.print(F("- Setting gas measurement to 320\xC2\xB0\x43 for 150ms\n"));  // "�C" symbols
-    BME680[objectCursor].setGas(320, 150);  // 320�c for 150 milliseconds
+    //Serial.print(F("- Setting gas measurement to 320\xC2\xB0\x43 for 150ms\n"));  // "?C" symbols
+    BME680[objectCursor].setGas(320, 150);  // 320?c for 150 milliseconds
   } else if (sensorIdLocal == 2301) {
     Serial.print(F("Initializing DHT AM2301 sensor at pin: "));
     if(powerPin > -1) {
@@ -657,6 +659,11 @@ void sendRemoteData(String datastring, String mode){
       } else if(retLine.charAt(0) == '|') {
         setLocalHardwareToServerStateFromNonJson((char *)retLine.c_str());
         receivedDataJson = true;
+        break;   
+      } else if(retLine.charAt(0) == '!') { //it's a command, so an exclamation point seems right
+        Serial.print("COMMAND: ");
+        Serial.println(retLine);
+        runCommandsFromNonJson((char *)retLine.c_str());
         break;         
       } else {
       }
@@ -664,6 +671,58 @@ void sendRemoteData(String datastring, String mode){
    
   } //if (attempts >= connection_retry_number)....else....    
   clientGet.stop();
+}
+
+void runCommandsFromNonJson(char * nonJsonLine){
+  String command;
+  int commandId;
+  String commandData;
+  String commandArray[3];
+  //first get rid of the first character, since all it does is signal that we are receiving a command:
+  nonJsonLine++;
+  splitString(nonJsonLine, '|', commandArray, 3);
+  commandId = commandArray[0].toInt();
+  command = commandArray[1];
+  commandData = commandArray[2];
+  if(command == "reboot") {
+    rebootEsp();
+  } else if(command == "allpinsatonce") {
+    //onePinAtATimeMode = 0; //setting a global.
+  } else if(command == "ir") {
+    sendIr(commandData); //ir data must be comma-delimited
+  } else if(command == "ir") {
+    sendIr(commandData); //ir data must be comma-delimited
+  }
+  lastCommandId = commandId;
+}
+
+void sendIr(String rawDataStr) {
+  irsend.begin();
+  //Example input string
+  //rawDataStr = "500,1500,500,1500,1000";
+  size_t rawDataLength = 0;
+
+  // Count commas to determine array length
+  for (size_t i = 0; i < rawDataStr.length(); i++) {
+    if (rawDataStr[i] == ',') rawDataLength++;
+  }
+  rawDataLength++; // Account for the last value
+  // Allocate array
+  uint16_t* rawData = (uint16_t*)malloc(rawDataLength * sizeof(uint16_t));
+
+  // Parse the string into the array
+  size_t index = 0;
+  int start = 0;
+  for (size_t i = 0; i <= rawDataStr.length(); i++) {
+    if (rawDataStr[i] == ',' || rawDataStr[i] == '\0') {
+      rawData[index++] = rawDataStr.substring(start, i).toInt();
+      start = i + 1;
+    }
+  }
+  // Send the parsed raw data
+  irsend.sendRaw(rawData, rawDataLength, 38);
+  Serial.println("IR signal sent!");
+  free(rawData); // Free memory
 }
 
 
@@ -799,6 +858,8 @@ void setLocalHardwareToServerStateFromNonJson(char * nonJsonLine){
   }
   pinTotal = foundPins;
 }
+
+
 
 
 ///////////////////////////////////////////////
