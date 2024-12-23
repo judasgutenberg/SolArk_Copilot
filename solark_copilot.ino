@@ -15,7 +15,6 @@
 
 #include <SimpleMap.h>
 
-
 #include "config.h"
 
 #include "Zanshin_BME680.h"  // Include the BME680 Sensor library
@@ -26,9 +25,7 @@
 #include <Adafruit_BMP280.h>
 #include <Wire.h>
 
-
 #include "index.h" //Our HTML webpage contents with javascriptrons
-
 
 //i created 12 of each sensor object in case we added lots more sensors via device_features
 //amusingly, this barely ate into memory at all
@@ -84,8 +81,6 @@ bool goodDataMode = false;
 long localChangeTime = 0;
 int requestNonJsonPinInfo = 1;
  
- 
-
 void setup() {
   Serial.begin(115200);
   for(int i=0; i<10; i++) {
