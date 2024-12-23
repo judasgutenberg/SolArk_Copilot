@@ -19,8 +19,6 @@ const int connection_retry_number = 22;
 const int granularity_when_in_connection_failure_mode = 5; //40 was too little time for everything to come up and start working reliably, at least with my sketchy cellular connection
 const int hotspot_limited_time_frame = 340; //seconds
 
-const int moxee_power_switch = 13; //usually 14 set to -1 if not used
-
 const int deep_sleep_time_per_loop = 0;  //in seconds. saves energy.  set to zero if unneeded
 
 //if you are using a DHT hygrometer/temperature probe, these values will be important
