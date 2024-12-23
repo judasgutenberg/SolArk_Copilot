@@ -185,9 +185,7 @@ String additionalPowerData() {//sets the globals with the current reading from t
     power_mWb = ina219b->getPower_mW();
     loadvoltageb = busvoltageb + (shuntvoltagea / 1000);
   }
-  
-  measuredVoltage = loadvoltage;
-  measuredAmpage = current_mA;
+ 
   String out = loadvoltagea + "*" + current_mAa + "*" + loadvoltageb + "*" + current_mAb;
   return out;
 }
