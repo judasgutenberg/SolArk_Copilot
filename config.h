@@ -34,5 +34,5 @@ extern const char pins_to_start_low[];
 
 extern const int ir_pin; 
 extern const int ina219_address;
-extern const int ina219_address_a
-extern const int ina219_address_b
+extern const int ina219_address_a;
+extern const int ina219_address_b;
