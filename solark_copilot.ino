@@ -41,6 +41,8 @@ Generic_LM75 LM75[2];
 Adafruit_BMP280 BMP280[2];
 IRsend irsend(ir_pin);
 Adafruit_INA219* ina219;
+Adafruit_INA219* ina219a;
+Adafruit_INA219* ina219b;
 
 String serialContent = "";
 String ipAddress;
@@ -113,6 +115,16 @@ void setup() {
       ina219->setCalibration_16V_400mA();
     }
   }
+  if(ina219_address_a > -1) {
+    ina219a = new Adafruit_INA219(ina219_address_a);
+    if (!ina219a->begin()) {
+    }
+  }
+  if(ina219_address_b > -1) {
+    ina219b = new Adafruit_INA219(ina219_address_b);
+    if (!ina219b->begin()) {
+    }
+  }
   feedbackSerial.begin(115200);
 }
 
@@ -145,6 +157,39 @@ void lookupLocalPowerData() {//sets the globals with the current reading from th
   Serial.print("Power:         "); Serial.print(power_mW); Serial.println(" mW");
   Serial.println("");
   */
+}
+
+String additionalPowerData() {//sets the globals with the current reading from the ina219
+  float shuntvoltagea = 0;
+  float busvoltagea = 0;
+  float current_mAa = 0;
+  float loadvoltagea = 0;
+  float power_mWa = 0;
+  float shuntvoltageb = 0;
+  float busvoltageb = 0;
+  float current_mAb = 0;
+  float loadvoltageb = 0;
+  float power_mWb = 0;
+
+  if(ina219_address_a > -1) {
+    shuntvoltagea = ina219a->getShuntVoltage_mV();
+    busvoltagea = ina219a->getBusVoltage_V();
+    current_mAa = ina219a->getCurrent_mA();
+    power_mWa = ina219a->getPower_mW();
+    loadvoltagea = busvoltagea + (shuntvoltagea / 1000);
+  }
+  if(ina219_address_b > -1) {
+    shuntvoltageb = ina219b->getShuntVoltage_mV();
+    busvoltageb = ina219b->getBusVoltage_V();
+    current_mAb = ina219b->getCurrent_mA();
+    power_mWb = ina219b->getPower_mW();
+    loadvoltageb = busvoltageb + (shuntvoltagea / 1000);
+  }
+  
+  measuredVoltage = loadvoltage;
+  measuredAmpage = current_mA;
+  String out = loadvoltagea + "*" + current_mAa + "*" + loadvoltageb + "*" + current_mAb;
+  return out;
 }
 
 void startWeatherSensors(int sensorIdLocal, int sensorSubTypeLocal, int i2c, int pinNumber, int powerPin) {
@@ -407,6 +452,7 @@ void loop() {
         //dataToDisplay = goodData;
         int packetSize = goodData.length();
         dataToDisplay =  parseInverterData(goodData) + "*" + (String)packetSize;
+        dataToDisplay = dataToDisplay + "*" + additionalPowerData(); //*volta*ampa*voltb*ampb after packetSize
         if(millis() - lastDataLogTime > data_logging_granularity * 1000) {
           if(sensor_id > -1) {
             glblRemote = true;
