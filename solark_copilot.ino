@@ -186,7 +186,7 @@ String additionalPowerData() {//sets the globals with the current reading from t
     loadvoltageb = busvoltageb + (shuntvoltagea / 1000);
   }
  
-  String out = loadvoltagea + "*" + current_mAa + "*" + loadvoltageb + "*" + current_mAb;
+  String out = (String)loadvoltagea + "*" + (String)current_mAa + "*" + (String)loadvoltageb + "*" + (String)current_mAb;
   return out;
 }
 
