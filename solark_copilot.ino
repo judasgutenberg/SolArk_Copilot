@@ -155,7 +155,7 @@ void lookupLocalPowerData() {//sets the globals with the current reading from th
   */
 }
 
-String additionalPowerData() {//sets the globals with the current reading from the ina219
+String additionalPowerData() {//used for reading the voltages on the solar strings, since i can't get those from the solark itself
   float shuntvoltagea = 0;
   float busvoltagea = 0;
   float current_mAa = 0;
