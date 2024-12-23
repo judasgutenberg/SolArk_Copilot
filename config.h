@@ -20,7 +20,6 @@ extern const int connection_retry_number;
 extern const int granularity_when_in_connection_failure_mode; //40 was too little time for everything to come up and start working reliably, at least with my sketchy cellular connection
 extern const int hotspot_limited_time_frame; //seconds
 
-extern const int moxee_power_switch; //usually 14
 extern const int deep_sleep_time_per_loop; //seconds. doesn't yet work
 
 extern const int sensor_data_pin;  
