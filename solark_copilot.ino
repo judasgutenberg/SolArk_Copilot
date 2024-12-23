@@ -8,7 +8,9 @@
 #include <ESP8266HTTPClient.h>
 #include <Wire.h>
 #include <SoftwareSerial.h>
-
+#include <IRremoteESP8266.h>
+#include <IRsend.h>
+#include <Adafruit_INA219.h>
 
 #include <SimpleMap.h>
 
@@ -35,9 +37,10 @@ DHT* dht[6];
 SFE_BMP180 BMP180[2];
 BME680_Class BME680[2];
 Adafruit_BMP085 BMP085d[2];
-Generic_LM75 LM75[12];
+Generic_LM75 LM75[2];
 Adafruit_BMP280 BMP280[2];
-
+IRsend irsend(ir_pin);
+Adafruit_INA219* ina219;
 
 String serialContent = "";
 String ipAddress;
@@ -51,12 +54,16 @@ long connectionFailureTime;
 bool connectionFailureMode = false;
 ESP8266WebServer server(80); //Server on port 80
 SoftwareSerial feedbackSerial(3, 1);
+long lastCommandId = 0;
 
 String additionalSensorInfo; //we keep it stored in a delimited string just the way it came from the server and unpack it periodically to get the data necessary to read sensors
 int pinTotal = 12;
 String pinList[12]; //just a list of pins
 String pinName[12]; //for friendly names
 bool localSource = false;
+float measuredVoltage = 0;
+float measuredAmpage = 0;
+
 SimpleMap<String, int> *pinMap = new SimpleMap<String, int>([](String &a, String &b) -> int {
   if (a == b) return 0;      // a and b are equal
   else if (a > b) return 1;  // a is bigger than b
@@ -99,8 +106,45 @@ void setup() {
   Serial.println("about to swap");
   delay(4000);
   Serial.swap();
+  if(ina219_address > -1) {
+    ina219 = new Adafruit_INA219(ina219_address);
+    if (!ina219->begin()) {
+    } else {
+      ina219->setCalibration_16V_400mA();
+    }
+  }
   feedbackSerial.begin(115200);
-  
+}
+
+void lookupLocalPowerData() {//sets the globals with the current reading from the ina219
+  if(ina219_address < 0) { //if we don't have a ina219 then do not bother
+    return;
+  }
+  float shuntvoltage = 0;
+  float busvoltage = 0;
+  float current_mA = 0;
+  float loadvoltage = 0;
+  float power_mW = 0;
+
+  shuntvoltage = ina219->getShuntVoltage_mV();
+  busvoltage = ina219->getBusVoltage_V();
+  current_mA = ina219->getCurrent_mA();
+  power_mW = ina219->getPower_mW();
+  loadvoltage = busvoltage + (shuntvoltage / 1000);
+  measuredVoltage = loadvoltage;
+  measuredAmpage = current_mA;
+  /*
+  Serial.print("volt: ");
+  Serial.print(measuredVoltage);
+  Serial.print(" amp: ");
+  Serial.println(measuredAmpage);
+  Serial.print("Bus Voltage:   "); Serial.print(busvoltage); Serial.println(" V");
+  Serial.print("Shunt Voltage: "); Serial.print(shuntvoltage); Serial.println(" mV");
+  Serial.print("Load Voltage:  "); Serial.print(loadvoltage); Serial.println(" V");
+  Serial.print("Current:       "); Serial.print(current_mA); Serial.println(" mA");
+  Serial.print("Power:         "); Serial.print(power_mW); Serial.println(" mW");
+  Serial.println("");
+  */
 }
 
 void startWeatherSensors(int sensorIdLocal, int sensorSubTypeLocal, int i2c, int pinNumber, int powerPin) {
@@ -128,8 +172,8 @@ void startWeatherSensors(int sensorIdLocal, int sensorSubTypeLocal, int i2c, int
     BME680[objectCursor].setOversampling(PressureSensor, Oversample16);     // Use enumerated type values
     //Serial.print(F("- Setting IIR filter to a value of 4 samples\n"));
     BME680[objectCursor].setIIRFilter(IIR4);  // Use enumerated type values
-    //Serial.print(F("- Setting gas measurement to 320\xC2\xB0\x43 for 150ms\n"));  // "�C" symbols
-    BME680[objectCursor].setGas(320, 150);  // 320�c for 150 milliseconds
+    //Serial.print(F("- Setting gas measurement to 320\xC2\xB0\x43 for 150ms\n"));  // "?C" symbols
+    BME680[objectCursor].setGas(320, 150);  // 320?c for 150 milliseconds
   } else if (sensorIdLocal == 2301) {
     Serial.print(F("Initializing DHT AM2301 sensor at pin: "));
     if(powerPin > -1) {
@@ -305,12 +349,10 @@ String weatherDataString(int sensor_id, int sensor_sub_type, int dataPin, int po
     transmissionString = nullifyOrNumber(temperatureValue) + "*" + nullifyOrNumber(pressureValue);
     transmissionString = transmissionString + "*" + nullifyOrNumber(humidityValue);
     transmissionString = transmissionString + "*" + nullifyOrNumber(gasValue);
-    transmissionString = transmissionString + "*********"; //for esoteric weather sensors that measure wind and precipitation.  the last four are reserved for now.  
-    
+    transmissionString = transmissionString + "*********"; //for esoteric weather sensors that measure wind and precipitation.  the last four are reserved for now
   }
   //using delimited data instead of JSON to keep things simple
   transmissionString = transmissionString + nullifyOrInt(sensor_id) + "*" + nullifyOrInt(deviceFeatureId) + "*" + sensorName + "*" + nullifyOrInt(consolidateAllSensorsToOneRecord); 
-  transmissionString = transmissionString + "*" + analogRead(0); //i use analogRead to check the 12v battery on the generator
   return transmissionString;
 }
 
@@ -330,7 +372,6 @@ void postData(String datastring){
 
  
 void loop() {
-  // put your main code here, to run repeatedly:
   // send data only when you receive data:
   char incomingByte = ' ';
   String startValidIndication = "MB_real data,seg_cnt:3\r\r";
@@ -341,9 +382,9 @@ void loop() {
     }
   }
   if(nowTime > 1000 * 86400 * 7 || nowTime < hotspot_limited_time_frame * 1000  && moxeeRebootCount >= number_of_hotspot_reboots_over_limited_timeframe_before_esp_reboot) {
-    feedbackSerial.print("MOXEE REBOOT COUNT: ");
-    feedbackSerial.print(moxeeRebootCount);
-    feedbackSerial.println();
+    feedbackPrint("MOXEE REBOOT COUNT: ");
+    feedbackPrint(moxeeRebootCount);
+    feedbackPrint("\n");
     rebootEsp();
   }
     
@@ -365,7 +406,7 @@ void loop() {
       if (incomingByte == '\r'){
         //dataToDisplay = goodData;
         int packetSize = goodData.length();
-        dataToDisplay =  parseData(goodData) + "*" + (String)packetSize;
+        dataToDisplay =  parseInverterData(goodData) + "*" + (String)packetSize;
         if(millis() - lastDataLogTime > data_logging_granularity * 1000) {
           if(sensor_id > -1) {
             glblRemote = true;
@@ -384,9 +425,13 @@ void loop() {
            changeSourceId = 1;
         }
         
-        dataToDisplay += "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|***" + ipAddressToUse + "*" + requestNonJsonPinInfo + "*1*" + changeSourceId;
-        feedbackSerial.println(packetSize);
-        feedbackSerial.println(dataToDisplay); 
+        dataToDisplay = dataToDisplay + "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|" + (int)lastCommandId + "**" + (int)localSource + "*" + ipAddressToUse + "*" + requestNonJsonPinInfo + "*1*" + changeSourceId;
+        dataToDisplay = dataToDisplay + "|*" + measuredVoltage + "*" + measuredAmpage; //if this device could timestamp data from its archives, it would put the numeric timetamp before measuredVoltage
+        //dataToDisplay += + "*" + latitude + "*" + longitude; //not yet supported. might also include accelerometer data some day
+        feedbackPrint(packetSize);
+        feedbackPrint("\n");
+        feedbackPrint(dataToDisplay); 
+        feedbackPrint("\n");
         if(packetSize == 745) {
           sendRemoteData(dataToDisplay, "saveLocallyGatheredSolarData");
         } else {
@@ -419,24 +464,24 @@ void localSetData() {
   for (int i = 0; i < server.args(); i++) {
     if(server.argName(i) == "id") {
       id = server.arg(i);
-      Serial.print(id);
-      Serial.print( " : ");
+      //Serial.print(id);
+      //Serial.print( " : ");
     } else if (server.argName(i) == "on") {
       onValue = (int)(server.arg(i) == "1");  
     }
-    Serial.print(onValue);
-    Serial.println();
+    //Serial.print(onValue);
+    //Serial.println();
   } 
   for (int i = 0; i < pinMap->size(); i++) {
     String key = pinList[i];
-    Serial.print(key);
-    Serial.print(" ?= ");
-    Serial.println(id);
+    //Serial.print(key);
+    //Serial.print(" ?= ");
+    //Serial.println(id);
     if(key == id) {
       pinMap->remove(key);
       pinMap->put(key, onValue);
-      Serial.print("LOCAL SOURCE TRUE :");
-      Serial.println(onValue);
+      //Serial.print("LOCAL SOURCE TRUE :");
+      //Serial.println(onValue);
       localSource = true; //sets the NodeMCU into a mode it cannot get out of until the server sends back confirmation it got the data
     }
   }
@@ -521,7 +566,7 @@ int generateDecimalFromStringPositions(String inData, int start, int stop) {
   return out;
 }
 
-String parseData(String inData){
+String parseInverterData(String inData){
   //mysteryValues and changers are values whose meanings I haven't yet determined. i log them on the backend and try to figure them out by context
   int firstChanger = generateDecimalFromStringPositions(inData, 7, 13);
   int secondChanger = generateDecimalFromStringPositions(inData, 25, 31);
@@ -559,6 +604,7 @@ String parseData(String inData){
 
 //SEND DATA TO A REMOTE SERVER TO STORE IN A DATABASE----------------------------------------------------
 void sendRemoteData(String datastring, String mode){
+  printLine(datastring);
   WiFiClient clientGet;
   const int httpGetPort = 80;
   String url;
@@ -628,6 +674,7 @@ void sendRemoteData(String datastring, String mode){
       //device_features in one data object (assuming it's not too big). The ESP8266 still can respond to data in the
       //JSON format, which it will assume if the first character of the data is a '{' -- but if the first character
       //is a '|' then it assumes the data is non-JSON. Otherwise it assumes it's HTTP boilerplate and ignores it.
+      printLine(retLine);
       if(retLine.charAt(0) == '*') { //getInitialDeviceInfo
         //Serial.print("Initial Device Data: ");
         //Serial.println(retLine);
@@ -659,6 +706,11 @@ void sendRemoteData(String datastring, String mode){
       } else if(retLine.charAt(0) == '|') {
         setLocalHardwareToServerStateFromNonJson((char *)retLine.c_str());
         receivedDataJson = true;
+        break;   
+      } else if(retLine.charAt(0) == '!') { //it's a command, so an exclamation point seems right
+        //Serial.print("COMMAND: ");
+        printLine(retLine);
+        runCommandsFromNonJson((char *)retLine.c_str());
         break;         
       } else {
       }
@@ -668,9 +720,61 @@ void sendRemoteData(String datastring, String mode){
   clientGet.stop();
 }
 
+void runCommandsFromNonJson(char * nonJsonLine){
+  String command;
+  int commandId;
+  String commandData;
+  String commandArray[3];
+  //first get rid of the first character, since all it does is signal that we are receiving a command:
+  nonJsonLine++;
+  splitString(nonJsonLine, '|', commandArray, 3);
+  commandId = commandArray[0].toInt();
+  command = commandArray[1];
+  commandData = commandArray[2];
+  if(command == "reboot") {
+    rebootEsp();
+  } else if(command == "allpinsatonce") {
+    //onePinAtATimeMode = 0; //setting a global.
+  } else if(command == "ir") {
+    sendIr(commandData); //ir data must be comma-delimited
+  } else if(command == "ir") {
+    sendIr(commandData); //ir data must be comma-delimited
+  }
+  lastCommandId = commandId;
+}
+
+void sendIr(String rawDataStr) {
+  irsend.begin();
+  //Example input string
+  //rawDataStr = "500,1500,500,1500,1000";
+  size_t rawDataLength = 0;
+
+  // Count commas to determine array length
+  for (size_t i = 0; i < rawDataStr.length(); i++) {
+    if (rawDataStr[i] == ',') rawDataLength++;
+  }
+  rawDataLength++; // Account for the last value
+  // Allocate array
+  uint16_t* rawData = (uint16_t*)malloc(rawDataLength * sizeof(uint16_t));
+
+  // Parse the string into the array
+  size_t index = 0;
+  int start = 0;
+  for (size_t i = 0; i <= rawDataStr.length(); i++) {
+    if (rawDataStr[i] == ',' || rawDataStr[i] == '\0') {
+      rawData[index++] = rawDataStr.substring(start, i).toInt();
+      start = i + 1;
+    }
+  }
+  // Send the parsed raw data
+  irsend.sendRaw(rawData, rawDataLength, 38);
+  //Serial.println("IR signal sent!");
+  free(rawData); // Free memory
+}
+
 
 String handleDeviceNameAndAdditionalSensors(char * sensorData, bool intialize){
-  feedbackSerial.println(sensorData);
+  feedbackPrint(sensorData);
   String additionalSensorArray[12];
   String specificSensorData[8];
   int i2c;
@@ -746,12 +850,13 @@ void setLocalHardwareToServerStateFromNonJson(char * nonJsonLine){
   String nonJsonPinDatum[5];
   String pinIdParts[2];
   char i2c = 0;
-  feedbackSerial.println(nonJsonLine);
+  feedbackPrint(nonJsonLine);
   //return;
   splitString(nonJsonLine, '|', nonJsonPinArray, 12);
   int foundPins = 0;
   for(int i=1; i<12; i++) {
     nonJsonDatumString = nonJsonPinArray[i];
+    //Serial.println(nonJsonDatumString);
     if(nonJsonDatumString.indexOf('*')>-1) {  
       splitString(nonJsonDatumString, '*', nonJsonPinDatum, 5);
       key = nonJsonPinDatum[1];
@@ -801,6 +906,8 @@ void setLocalHardwareToServerStateFromNonJson(char * nonJsonLine){
   }
   pinTotal = foundPins;
 }
+
+
 
 
 ///////////////////////////////////////////////
@@ -947,4 +1054,20 @@ String replaceFirstOccurrenceAtChar(String str1, String str2, char atChar) { //t
     // Construct the new string with the second string inserted.
     String result = beforeDelimiter + "|" + str2 + "|" + afterDelimiter;
     return result;
+}
+
+///print utils -- comment-out as needed to keep serial line pure
+
+void feedbackPrint(int value){
+  feedbackSerial.print((String)value);
+  //Serial.println(value);
+}
+
+void feedbackPrint(String value){
+  feedbackSerial.print(value);
+}
+
+void printLine(String value){
+ //normally commented-out
+ //Serial.println(value);
 }
