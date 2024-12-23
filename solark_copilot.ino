@@ -2,6 +2,7 @@
 //uses an ESP8266 wired with the swap serial pins (D8 as TX and D7 as RX) connected to the exposed serial header on the ESP32 in the SolArk's WiFi dongle.
 //this intercepts the communication data between the SolArk and the dongle to get frequent updates (that is, every few seconds) of the power and battery levels.
 //the data still makes it to PowerView (now MySolArk) but you have access to it much sooner, locally, and at much finer granularity
+//this is similar to the ESP8266Remte, but has the SolArk monitoring but no Moxee Rebooting functionality
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
@@ -82,8 +83,8 @@ int totalSerialChars = 0;
 bool goodDataMode = false;
 long localChangeTime = 0;
 int requestNonJsonPinInfo = 1;
-int moxeeRebootCount = 0;
-long moxeeRebootTimes[] = {0,0,0,0,0,0,0,0,0,0,0};
+ 
+ 
 
 void setup() {
   Serial.begin(115200);
@@ -424,12 +425,7 @@ void loop() {
       server.handleClient();
     }
   }
-  if(nowTime > 1000 * 86400 * 7 || nowTime < hotspot_limited_time_frame * 1000  && moxeeRebootCount >= number_of_hotspot_reboots_over_limited_timeframe_before_esp_reboot) {
-    feedbackPrint("MOXEE REBOOT COUNT: ");
-    feedbackPrint(moxeeRebootCount);
-    feedbackPrint("\n");
-    rebootEsp();
-  }
+ 
     
   if (Serial.available() > 0) {
     // read the incoming byte:
@@ -667,7 +663,7 @@ void sendRemoteData(String datastring, String mode){
   if (attempts >= connection_retry_number) {
     connectionFailureTime = millis();
     connectionFailureMode = true;
-    //rebootMoxee();
+ 
   } else {
      connectionFailureTime = 0;
      connectionFailureMode = false;
@@ -680,7 +676,7 @@ void sendRemoteData(String datastring, String mode){
      unsigned long timeoutP = millis();
      while (clientGet.available() == 0) {
        if (millis() - timeoutP > 10000) {
-        //let's try a simpler connection and if that fails, then reboot moxee
+ 
         //clientGet.stop();
         if(clientGet.connect(host_get, httpGetPort)){
          //timeOffset = timeOffset + timeSkewAmount; //in case two probes are stepping on each other, make this one skew a 20 seconds from where it tried to upload data
@@ -960,17 +956,7 @@ void rebootEsp() {
   ESP.restart();
 }
 
-void rebootMoxee() {  //moxee hotspot is so stupid that it has no watchdog.  so here i have a little algorithm to reboot it.
-  if(moxee_power_switch > -1) {
-    digitalWrite(moxee_power_switch, LOW);
-    delay(7000);
-    digitalWrite(moxee_power_switch, HIGH);
-  }
-  //only do one reboot!  it usually takes two, but this thing can be made to cycle so fast that this same function can handle both reboots, which is important if the reboot happens to 
-  //be out of phase with the cellular hotspot
-  shiftArrayUp(moxeeRebootTimes,  millis(), 10);
-  moxeeRebootCount++;
-}
+ 
 //////////////////////////////////////////////
 long getPinValueOnSlave(char i2cAddress, char pinNumber) { //might want a user-friendlier API here
   //reading an analog or digital value from the slave:
