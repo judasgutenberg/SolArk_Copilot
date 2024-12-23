@@ -1,3 +1,4 @@
+//produces a web page viewable only on the local network allowing control of devices and reading of sensors
 const char MAIN_page[] PROGMEM = R"=====(
 <!DOCTYPE html>
 <html>
@@ -14,7 +15,7 @@ body{
 h2{
   font-size:14px;
 }
-.widget{
+.webapp{
   margin:100px auto;
   height: 330px;
   position: relative;
@@ -71,7 +72,7 @@ h2{
 </style>
 <body>
 
-<div class="widget"> 
+<div class="webapp"> 
   <div id='devicename'>Your Device</div>
   <div class="devices" id="devices">    
   </div>
@@ -79,11 +80,12 @@ h2{
   <table class="sensors">
     <tbody id="sensors"></tbody>    
   </table>
-   
 </div>
 
 <script>
 setInterval(showPinValues, 7000);
+let columnNames = "temperature*pressure*humidity*gas*windDirection*windSpeed*windIncrement*precipitation*reserved1*reserved2*reserved3*reserved4".split("*");
+let units = "&deg; F*mm Hg*% rel*gas*&deg;*mph*/min*/min*reserved1*reserved2*reserved3*reserved4".split("*");
 
 function updateWeatherDisplay() {
     let xhttp = new XMLHttpRequest();
@@ -96,41 +98,38 @@ function updateWeatherDisplay() {
         let sensorsDiv = document.getElementById("sensors");
         let firstSensorDone = false;
         let sensorCursor = 0;
-        for(weatherLine of weatherLines){  
+        for(let weatherLine of weatherLines){
+          let parentDiv = "";  
+          let potentialWeatherDisplay = "";
           if(weatherLine.indexOf("*") > -1) {
             console.log(weatherLine);
             let weatherData = weatherLine.split("*");
-            //temperatureValue*pressureValue*humidityValue*gasValue*sensorType*deviceFeatureId"*sensorName; //using delimited data instead of JSON to keep things simple
-            let temperature = weatherData[0];
-            let pressure = weatherData[1];
-            let humidity = weatherData[2];
-            let sensorName = weatherData[6];
-            let potentialWeatherDisplay = "";
-            let parentDiv = "";
+            let sensorName = weatherData[14];
+            //temperature*pressure*humidity*gas*windDirection*windSpeed*windIncrement*precipitation*reserved1*reserved2*reserved3*reserved4 
+            //using delimited data instead of JSON to keep things concise and simple
             let weHadData = false;
+            let columnCursor = 0;
             parentDiv += "<tr id='sensor" + sensorCursor + "'>";
             if(firstSensorDone) {
               potentialWeatherDisplay += "<td class='sensorname'>" + sensorName + "</td>";
             } else {
               potentialWeatherDisplay += "<td></td>";
             }
-            if(temperature != "NULL" && !isNaN(temperature) && temperature != "NaN" && temperature != "") {
-              potentialWeatherDisplay += "<td class='weatherdata'>" + (parseFloat(temperature) * 1.8 + 32).toFixed(2) + "&deg; F" + "</td>";
-              //document.getElementById("temperature").innerHTML = (parseFloat(temperature) * 1.8 + 32).toFixed(2) + "&deg; F"; 
-              weHadData = true;
+            for(let column of columnNames) {
+              if(weatherData.length > columnCursor) {
+                let value = weatherData[columnCursor];
+                let unitName = units[columnCursor];
+                if(column == "temperature") {//units are in C but we need F because AMERICA F YEAH!!
+                  value = (value * 9/5) + 32;
+                }
+                if(value != "NULL" && !isNaN(value) && value != "") {
+                  potentialWeatherDisplay += "<td class='weatherdata'>" +  parseFloat(value).toFixed(2) + unitName + "</td>";
+                  weHadData = true;
+                }
+              }
+              columnCursor++;
             }
-            if(pressure != "NULL"  && !isNaN(pressure) && pressure != "NaN" && pressure != "") {
-              potentialWeatherDisplay += "<td class='weatherdata'>" +  parseFloat(pressure).toFixed(2) + "mm Hg" + "</td>";
-              //document.getElementById("pressure").innerHTML = parseFloat(pressure).toFixed(2) + "mm Hg";
-              weHadData = true;
-            }
-            if(humidity != "NULL" && !isNaN(humidity) && humidity != "NaN" && humidity != "") {
-             potentialWeatherDisplay += "<td class='weatherdata'>" +  parseFloat(humidity).toFixed(2) + "% rel" + "</td>";
-              //document.getElementById("humidity").innerHTML = parseFloat(humidity).toFixed(2) + "% rel";
-             weHadData = true; 
-            } 
             parentDiv += "</tr>";
-           
             if(weHadData) {
               document.getElementById('sensorheader').style.display = 'block';
               let particularSensorDiv = document.getElementById('sensor' + sensorCursor);
@@ -203,7 +202,7 @@ function showPinValues(){
    xhttp.send();
    setTimeout(function(){
       updateWeatherDisplay(); 
-      }, Math.random()* 10000); //i make this a little non-deterministic so the DHT sensors won't get stuck in a pattern where they are read to frequently
+      }, Math.random()* 4000); //i make this a little non-deterministic so the DHT sensors won't get stuck in a pattern where they are read to frequently
 }
 </script>
 </body>
