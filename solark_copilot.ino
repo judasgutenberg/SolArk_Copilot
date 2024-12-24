@@ -485,6 +485,13 @@ void loop() {
       totalSerialChars = 0;
       goodDataMode = true;   
     }
+    if(millis() > 10000) {
+      //this will only work if GPIO16 (D2 on a WEMOS D1) and EXT_RSTB are wired together. see https://www.electronicshub.org/esp8266-deep-sleep-mode/
+      if(deep_sleep_time_per_loop > 0) {
+        Serial.println("sleeping...");
+        ESP.deepSleep(deep_sleep_time_per_loop * 1e6); 
+      }
+    }
   }
 
 
