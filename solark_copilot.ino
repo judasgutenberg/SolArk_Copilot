@@ -442,7 +442,7 @@ void loop() {
         int packetSize = goodData.length();
         dataToDisplay =  parseInverterData(goodData) + "*" + (String)packetSize;
         dataToDisplay = dataToDisplay + "*" + additionalPowerData(); //*volta*ampa*voltb*ampb after packetSize
-        if(millis() - lastDataLogTime > data_logging_granularity * 1000) {
+        if(millis() - lastDataLogTime > data_logging_granularity * 1000 || millis() < data_logging_granularity * 1000 ) {
           if(sensor_id > -1) {
             glblRemote = true;
             String weatherData = weatherDataString(sensor_id, sensor_sub_type, sensor_data_pin, sensor_power_pin, sensor_i2c, NULL, 0, deviceName, consolidate_all_sensors_to_one_record);
@@ -756,6 +756,7 @@ void sendRemoteData(String datastring, String mode){
 }
 
 void runCommandsFromNonJson(char * nonJsonLine){
+  //can change the default values of some config data for things like polling
   String command;
   int commandId;
   String commandData;
@@ -768,10 +769,14 @@ void runCommandsFromNonJson(char * nonJsonLine){
   commandData = commandArray[2];
   if(command == "reboot") {
     rebootEsp();
-  } else if(command == "allpinsatonce") {
-    //onePinAtATimeMode = 0; //setting a global.
-  } else if(command == "ir") {
-    sendIr(commandData); //ir data must be comma-delimited
+  } else if(command == "one pin at a time") {
+    //onePinAtATimeMode = (boolean)commandData.toInt(); //setting a global.
+  } else if(command == "sleep seconds per loop") {
+    deep_sleep_time_per_loop = commandData.toInt(); //setting a global.
+  } else if(command == "polling granularity") {
+    polling_granularity = commandData.toInt(); //setting a global.
+  } else if(command == "logging granularity") {
+    data_logging_granularity = commandData.toInt(); //setting a global.
   } else if(command == "ir") {
     sendIr(commandData); //ir data must be comma-delimited
   }
