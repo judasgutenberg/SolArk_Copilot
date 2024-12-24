@@ -461,6 +461,7 @@ void loop() {
         }
         
         dataToDisplay = dataToDisplay + "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|" + (int)lastCommandId + "**" + (int)localSource + "*" + ipAddressToUse + "*" + requestNonJsonPinInfo + "*1*" + changeSourceId;
+        dataToDisplay = dataToDisplay + "**" + millis();
         dataToDisplay = dataToDisplay + "|*" + measuredVoltage + "*" + measuredAmpage; //if this device could timestamp data from its archives, it would put the numeric timetamp before measuredVoltage
         //dataToDisplay += + "*" + latitude + "*" + longitude; //not yet supported. might also include accelerometer data some day
         feedbackPrint(packetSize);
