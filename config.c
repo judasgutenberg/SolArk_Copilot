@@ -11,15 +11,15 @@ const int sensor_id = 280; //2301;//2301;//680; //SENSORS! -- we support these: 
 const int sensor_i2c = 0x76;
 const int consolidate_all_sensors_to_one_record = 1;
 const int device_id = the_id_in_device_table; 
-const int polling_granularity = 4; //how often to poll backend in seconds, 4 makes sense
-const int data_logging_granularity = 300; //how often to store data in backend, 300 makes sense
+int polling_granularity = 4; //how often to poll backend in seconds, 4 makes sense
+int data_logging_granularity = 300; //how often to store data in backend, 300 makes sense
 const int connection_failure_retry_seconds = 4;
 const int connection_retry_number = 22;
 
 const int granularity_when_in_connection_failure_mode = 5; //40 was too little time for everything to come up and start working reliably, at least with my sketchy cellular connection
 const int hotspot_limited_time_frame = 340; //seconds
 
-const int deep_sleep_time_per_loop = 0;  //in seconds. saves energy.  set to zero if unneeded
+int deep_sleep_time_per_loop = 0;  //in seconds. saves energy.  set to zero if unneeded. GPIO16/D0 needs to be conneted to RST in hardware first. can be changed remotely
 
 //if you are using a DHT hygrometer/temperature probe, these values will be important
 //particularly if you reflashed a MySpool temperature probe (https://myspool.com/) with custom firmware
