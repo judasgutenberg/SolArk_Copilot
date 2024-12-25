@@ -21,6 +21,7 @@ extern const int granularity_when_in_connection_failure_mode; //40 was too littl
 extern const int hotspot_limited_time_frame; //seconds
 
 extern int deep_sleep_time_per_loop; //seconds. 
+extern int light_sleep_time_per_loop;
 
 extern const int sensor_data_pin;  
 extern const int sensor_power_pin;  
