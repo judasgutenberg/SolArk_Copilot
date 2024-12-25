@@ -493,9 +493,24 @@ void loop() {
         ESP.deepSleep(deep_sleep_time_per_loop * 1e6); 
       }
     }
+    //this will only work if GPIO16 and EXT_RSTB are wired together. see https://www.electronicshub.org/esp8266-deep-sleep-mode/
+    if(light_sleep_time_per_loop > 0) {
+      Serial.println("snoozing...");
+      sleepForSeconds(light_sleep_time_per_loop);
+      wiFiConnect();
+    }
   }
+}
 
+void sleepForSeconds(int seconds) {
+    wifi_set_opmode(NULL_MODE);            // Turn off Wi-Fi for lower power
+    wifi_set_sleep_type(LIGHT_SLEEP_T);    // Enable Light Sleep Mode
 
+    uint32_t sleepEndTime = millis() + seconds * 1000;
+    while (millis() < sleepEndTime) {
+        delay(10); // Short delays allow CPU to periodically enter light sleep
+    }
+    // GPIO states are preserved during this period
 }
 
 
@@ -781,6 +796,8 @@ void runCommandsFromNonJson(char * nonJsonLine){
     //onePinAtATimeMode = (boolean)commandData.toInt(); //setting a global.
   } else if(command == "sleep seconds per loop") {
     deep_sleep_time_per_loop = commandData.toInt(); //setting a global.
+  } else if(command == "snooze seconds per loop") {
+    light_sleep_time_per_loop = commandData.toInt(); //setting a global
   } else if(command == "polling granularity") {
     polling_granularity = commandData.toInt(); //setting a global.
   } else if(command == "logging granularity") {
