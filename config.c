@@ -20,6 +20,7 @@ const int granularity_when_in_connection_failure_mode = 5; //40 was too little t
 const int hotspot_limited_time_frame = 340; //seconds
 
 int deep_sleep_time_per_loop = 0;  //in seconds. saves energy.  set to zero if unneeded. GPIO16/D0 needs to be conneted to RST in hardware first. can be changed remotely
+int light_sleep_time_per_loop = 0;
 
 //if you are using a DHT hygrometer/temperature probe, these values will be important
 //particularly if you reflashed a MySpool temperature probe (https://myspool.com/) with custom firmware
