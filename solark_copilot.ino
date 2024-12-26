@@ -63,6 +63,7 @@ String pinName[12]; //for friendly names
 bool localSource = false;
 float measuredVoltage = 0;
 float measuredAmpage = 0;
+bool canSleep = false;
 
 SimpleMap<String, int> *pinMap = new SimpleMap<String, int>([](String &a, String &b) -> int {
   if (a == b) return 0;      // a and b are equal
@@ -486,7 +487,7 @@ void loop() {
       totalSerialChars = 0;
       goodDataMode = true;   
     }
-    if(millis() > 10000) {
+    if(canSleep) {
       //this will only work if GPIO16 (D2 on a WEMOS D1) and EXT_RSTB are wired together. see https://www.electronicshub.org/esp8266-deep-sleep-mode/
       if(deep_sleep_time_per_loop > 0) {
         printLine("sleeping...");
@@ -684,6 +685,9 @@ void sendRemoteData(String datastring, String mode){
     connectionFailureMode = true;
  
   } else {
+    if(mode != "getInitialDeviceInfo") {
+      canSleep = true; //canSleep is a global and will not be set until all the tasks of the device are finished.
+    }
      connectionFailureTime = 0;
      connectionFailureMode = false;
      clientGet.println("GET " + url + " HTTP/1.1");
