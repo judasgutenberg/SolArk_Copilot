@@ -224,7 +224,7 @@ void startWeatherSensors(int sensorIdLocal, int sensorSubTypeLocal, int i2c, int
     }
     dht[objectCursor] = new DHT(pinNumber, sensorSubTypeLocal);
     dht[objectCursor]->begin();
-  } else if(sensor_id == 2320) { //AHT20
+  } else if(sensorIdLocal == 2320) { //AHT20
     if (AHT[objectCursor].begin()) {
       Serial.println("Found AHT20");
     } else {
@@ -333,7 +333,7 @@ String weatherDataString(int sensor_id, int sensor_sub_type, int dataPin, int po
     if(powerPin > -1) {
       digitalWrite(powerPin, LOW);//turn off DHT power. maybe it saves energy, and that's why MySpool did it this way
     }
-  } else if (sensorIdLocal == 2320) { //AHT20
+  } else if (sensor_id == 2320) { //AHT20
     sensors_event_t humidity, temp;
     AHT[objectCursor].getEvent(&humidity, &temp);
     humidityValue = humidity.relative_humidity;
