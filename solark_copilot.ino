@@ -1001,7 +1001,7 @@ void rebootEsp() {
 }
 
  
-//////////////////////////////////////////////
+////////////////////////////////////////////////
 long getPinValueOnSlave(char i2cAddress, char pinNumber) { //might want a user-friendlier API here
   //reading an analog or digital value from the slave:
   Wire.beginTransmission(i2cAddress);
