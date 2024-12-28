@@ -224,17 +224,17 @@ void startWeatherSensors(int sensorIdLocal, int sensorSubTypeLocal, int i2c, int
     }
     dht[objectCursor] = new DHT(pinNumber, sensorSubTypeLocal);
     dht[objectCursor]->begin();
+  } else if(sensor_id == 2320) { //AHT20
+    if (AHT[objectCursor].begin()) {
+      Serial.println("Found AHT20");
+    } else {
+      Serial.println("Didn't find AHT20");
+    } 
   } else if (sensorIdLocal == 180) { //BMP180
     BMP180[objectCursor].begin();
   } else if (sensorIdLocal == 85) { //BMP085
     Serial.print(F("Initializing BMP085...\n"));
-    BMP085d[objectCursor].begin();
-  } else if(sensor_id == 2320) { //AHT20
-    sensors_event_t humidity, temp;
-    AHT[objectCursor].getEvent(&humidity, &temp);
-    humidityValue = humidity.relative_humidity;
-    temperatureValue = temp.temperature;
-    pressureValue = NULL;
+    BMP085d[objectCursor].begin(); 
   } else if (sensorIdLocal == 280) {
     Serial.print("Initializing BMP280 at i2c: ");
     Serial.print((int)i2c);
@@ -334,11 +334,11 @@ String weatherDataString(int sensor_id, int sensor_sub_type, int dataPin, int po
       digitalWrite(powerPin, LOW);//turn off DHT power. maybe it saves energy, and that's why MySpool did it this way
     }
   } else if (sensorIdLocal == 2320) { //AHT20
-    if (AHT[objectCursor].begin()) {
-      Serial.println("Found AHT20");
-    } else {
-      Serial.println("Didn't find AHT20");
-    }  
+    sensors_event_t humidity, temp;
+    AHT[objectCursor].getEvent(&humidity, &temp);
+    humidityValue = humidity.relative_humidity;
+    temperatureValue = temp.temperature;
+    pressureValue = NULL;
   } else if(sensor_id == 280) {
     humidityValue = NULL;
     temperatureValue = BMP280[objectCursor].readTemperature();
