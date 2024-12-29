@@ -13,6 +13,8 @@
 #include <IRsend.h>
 #include <Adafruit_INA219.h>
 
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 #include <SimpleMap.h>
 
 #include "config.h"
@@ -56,6 +58,10 @@ long connectionFailureTime;
 bool connectionFailureMode = false;
 ESP8266WebServer server(80); //Server on port 80
 SoftwareSerial feedbackSerial(3, 1);
+WiFiUDP ntpUDP; //i guess i need this for time lookup
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
+
+
 long lastCommandId = 0;
 
 String additionalSensorInfo; //we keep it stored in a delimited string just the way it came from the server and unpack it periodically to get the data necessary to read sensors
@@ -103,7 +109,8 @@ void setup() {
   server.on("/writeLocalData", localSetData);
   server.begin();
   startWeatherSensors(sensor_id, sensor_sub_type, sensor_i2c, sensor_data_pin, sensor_power_pin);
-  
+  timeClient.begin();
+  timeClient.setTimeOffset(0);
   Serial.println("about to swap");
   delay(4000);
   Serial.swap();
@@ -416,7 +423,15 @@ void postData(String datastring){
   HTTPClient http;
   String url;
   String mode = "debug";
-  String allData =  "storagePassword=" + (String)storage_password + "&locationId=" + device_id + "&mode=debug" + mode + "&data=" + datastring;
+
+
+  int timeStamp = timeClient.getEpochTime();
+  char buffer[10];
+  itoa(timeStamp, buffer, 10);  // Base 10 conversion
+  String timestampString = String(buffer);
+  String encryptedStoragePassword = urlEncode(simpleEncrypt((String)storage_password, timestampString, salt));
+
+  String allData =  "key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=debug" + mode + "&data=" + datastring;
   url = "http://" + (String)host_get + ":" + String(httpGetPort) + url_get;
   
   http.begin(clientGet, url);
@@ -478,7 +493,7 @@ void loop() {
         }
         
         dataToDisplay = dataToDisplay + "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|" + (int)lastCommandId + "**" + (int)localSource + "*" + ipAddressToUse + "*" + requestNonJsonPinInfo + "*1*" + changeSourceId;
-        dataToDisplay = dataToDisplay + "**" + millis();
+        dataToDisplay = dataToDisplay + "*" +  timeClient.getEpochTime()  + "*" + millis();
         dataToDisplay = dataToDisplay + "|*" + measuredVoltage + "*" + measuredAmpage; //if this device could timestamp data from its archives, it would put the numeric timetamp before measuredVoltage
         //dataToDisplay += + "*" + latitude + "*" + longitude; //not yet supported. might also include accelerometer data some day
         feedbackPrint(packetSize);
@@ -518,6 +533,7 @@ void loop() {
       wiFiConnect();
     }
   }
+  timeClient.update();
 }
 
 void sleepForSeconds(int seconds) {
@@ -688,7 +704,14 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
   if(deviceName == "") {
     mode = "getInitialDeviceInfo";
   }
-  url =  (String)url_get + "?storagePassword=" + (String)storage_password + "&locationId=" + device_id + "&mode=" + mode + "&data=" + datastring;
+
+  int timeStamp = timeClient.getEpochTime();
+  char buffer[10];
+  itoa(timeStamp, buffer, 10);  // Base 10 conversion
+  String timestampString = String(buffer);
+
+  String encryptedStoragePassword = urlEncode(simpleEncrypt((String)storage_password, timestampString, salt));
+  url =  (String)url_get + "?key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=" + mode + "&data=" + datastring;
   //Serial.println(host_get);
   int attempts = 0;
   while(!clientGet.connect(host_get, httpGetPort) && attempts < connection_retry_number) {
@@ -1043,16 +1066,17 @@ void setPinValueOnSlave(char i2cAddress, char pinNumber, char pinValue) {
 String urlEncode(String str) {
   String encodedString = "";
   char c;
-  for (int i =0; i < str.length(); i++) {
+  char hexDigits[] = "0123456789ABCDEF"; // Hex conversion lookup
+  for (int i = 0; i < str.length(); i++) {
     c = str.charAt(i);
     if (c == ' ') {
       encodedString += "%20";
     } else if (isalnum(c)) {
-      encodedString+= c;
+      encodedString += c;
     } else {
       encodedString += '%';
-      encodedString += (byte)c >> 4;
-      encodedString += (byte)c & 0xf;
+      encodedString += hexDigits[(c >> 4) & 0xF];
+      encodedString += hexDigits[c & 0xF];
     }
   }
   return encodedString;
@@ -1134,6 +1158,18 @@ String replaceFirstOccurrenceAtChar(String str1, String str2, char atChar) { //t
     // Construct the new string with the second string inserted.
     String result = beforeDelimiter + "|" + str2 + "|" + afterDelimiter;
     return result;
+}
+
+String simpleEncrypt(String plaintext, String key, String salt) {
+    String encrypted = "";
+    int keyLength = key.length();
+    int saltLength = salt.length();
+
+    for (int i = 0; i < plaintext.length(); i++) {
+        char encryptedChar = plaintext[i] ^ key[i % keyLength] ^ salt[i % saltLength];
+        encrypted += encryptedChar;
+    }
+    return encrypted;
 }
 
 ///print utils -- comment-out as needed to keep serial line pure
