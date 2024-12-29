@@ -2,7 +2,7 @@
 const char* wifi_ssid = "your_wifi_ssid"; //mine was Moxee Hotspot83_2.4G
 const char* wifi_password = "your_wifi_password";
 const char* storage_password = "your_secret"; //to ensure someone doesn't store bogus data on your server. should match value in the storage_password column in you tenant record
-const char* salt = "blurp1277";
+const char* salt = "some simple string";
 //data posted to remote server so we can keep a historical record
 //url will be in the form: http://your-server.com:80/weather/data.php?data=
 const char* url_get = "/your_directory/data.php";
