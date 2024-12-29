@@ -429,7 +429,7 @@ void postData(String datastring){
   char buffer[10];
   itoa(timeStamp, buffer, 10);  // Base 10 conversion
   String timestampString = String(buffer);
-  String encryptedStoragePassword = urlEncode(simpleEncrypt((String)storage_password, timestampString, salt));
+  String encryptedStoragePassword = urlEncode(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt));
 
   String allData =  "key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=debug" + mode + "&data=" + datastring;
   url = "http://" + (String)host_get + ":" + String(httpGetPort) + url_get;
@@ -710,7 +710,7 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
   itoa(timeStamp, buffer, 10);  // Base 10 conversion
   String timestampString = String(buffer);
 
-  String encryptedStoragePassword = urlEncode(simpleEncrypt((String)storage_password, timestampString, salt));
+  String encryptedStoragePassword = urlEncode(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt));
   url =  (String)url_get + "?key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=" + mode + "&data=" + datastring;
   //Serial.println(host_get);
   int attempts = 0;
@@ -1164,14 +1164,19 @@ String simpleEncrypt(String plaintext, String key, String salt) {
     String encrypted = "";
     int keyLength = key.length();
     int saltLength = salt.length();
+    int plainLength = plaintext.length();
 
-    for (int i = 0; i < plaintext.length(); i++) {
-        char encryptedChar = plaintext[i] ^ key[i % keyLength] ^ salt[i % saltLength];
-        encrypted += encryptedChar;
+    for (int i = 0; i < plainLength; i++) {
+        // Combine plaintext, key, and salt using positions
+        char mix = plaintext[i] 
+                   ^ key[i % keyLength] 
+                   ^ salt[i % saltLength];
+        // Further scramble by shifting based on position
+        mix = (mix << (i % 5)) | (mix >> (8 - (i % 5))); // Circular bit shift
+        encrypted += mix;
     }
     return encrypted;
 }
-
 ///print utils -- comment-out as needed to keep serial line pure
 
 void feedbackPrint(int value){
