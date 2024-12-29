@@ -452,12 +452,14 @@ void loop() {
       if(ipAddress.indexOf(' ') > 0) { //i was getting HTML header info mixed in for some reason
         ipAddress = ipAddress.substring(0, ipAddress.indexOf(' '));
       }
+      bool includesWeatherData = false;
       if (incomingByte == '\r'){
         //dataToDisplay = goodData;
         int packetSize = goodData.length();
         dataToDisplay =  parseInverterData(goodData) + "*" + (String)packetSize;
         dataToDisplay = dataToDisplay + "*" + additionalPowerData(); //*volta*ampa*voltb*ampb after packetSize
-        if(millis() - lastDataLogTime > data_logging_granularity * 1000 || millis() < data_logging_granularity * 1000 ) {
+        if(millis() - lastDataLogTime > data_logging_granularity * 1000 || lastDataLogTime == 0) {
+          includesWeatherData = true;
           if(sensor_id > -1) {
             glblRemote = true;
             String weatherData = weatherDataString(sensor_id, sensor_sub_type, sensor_data_pin, sensor_power_pin, sensor_i2c, NULL, 0, deviceName, consolidate_all_sensors_to_one_record);
@@ -466,7 +468,7 @@ void loop() {
             
             String additionalSensorData = handleDeviceNameAndAdditionalSensors((char *)additionalSensorInfo.c_str(), false);
             dataToDisplay +=  additionalSensorData;
-            lastDataLogTime = millis();
+            
           }
         }
         String ipAddressToUse = ipAddress;
@@ -484,9 +486,9 @@ void loop() {
         feedbackPrint(dataToDisplay); 
         feedbackPrint("\n");
         if(packetSize == 745) {
-          sendRemoteData(dataToDisplay, "saveLocallyGatheredSolarData");
+          sendRemoteData(dataToDisplay, "saveLocallyGatheredSolarData", includesWeatherData);
         } else {
-          sendRemoteData(dataToDisplay, "suspectLocallyGatheredSolarData");
+          sendRemoteData(dataToDisplay, "suspectLocallyGatheredSolarData", includesWeatherData);
         }
         goodData = "";
         goodDataMode = false;
@@ -677,7 +679,7 @@ String parseInverterData(String inData){
 }
 
 //SEND DATA TO A REMOTE SERVER TO STORE IN A DATABASE----------------------------------------------------
-void sendRemoteData(String datastring, String mode){
+void sendRemoteData(String datastring, String mode, bool includesWeatherData){
   printLine(datastring);
   WiFiClient clientGet;
   const int httpGetPort = 80;
@@ -728,6 +730,7 @@ void sendRemoteData(String datastring, String mode){
         return;
        } //if( millis() -  
      }
+     
     delay(4); //see if this improved data reception. OMG IT TOTALLY WORKED!!!
     bool receivedData = false;
     bool receivedDataJson = false;
@@ -739,6 +742,9 @@ void sendRemoteData(String datastring, String mode){
       receivedData = true;
       String retLine = clientGet.readStringUntil('\n');
       retLine.trim();
+      if(retLine.indexOf("\"error:") < 0 && includesWeatherData) {
+        lastDataLogTime = millis();
+      }
       //Here the code is designed to be able to handle either JSON or double-delimited data from data.php
       //I started with just JSON, but that's a notoriously bulky data format, what with the names of all the
       //entities embedded and the overhead of quotes and brackets.  This is a problem because when the 
@@ -1001,7 +1007,7 @@ void rebootEsp() {
 }
 
  
-////////////////////////////////////////////////
+//////////////////////////////////////////////
 long getPinValueOnSlave(char i2cAddress, char pinNumber) { //might want a user-friendlier API here
   //reading an analog or digital value from the slave:
   Wire.beginTransmission(i2cAddress);
