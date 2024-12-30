@@ -429,9 +429,9 @@ void postData(String datastring){
   char buffer[10];
   itoa(timeStamp, buffer, 10);  // Base 10 conversion
   String timestampString = String(buffer);
-  String encryptedStoragePassword = urlEncode(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt));
-
-  String allData =  "key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=debug" + mode + "&data=" + datastring;
+  byte checksum = calculateChecksum(datastring);
+  String encryptedStoragePassword = urlEncode(simpleEncrypt(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt), salt, String((char)checksum)));
+  String allData = "key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=debug" + mode + "&data=" + datastring;
   url = "http://" + (String)host_get + ":" + String(httpGetPort) + url_get;
   
   http.begin(clientGet, url);
@@ -709,8 +709,8 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
   char buffer[10];
   itoa(timeStamp, buffer, 10);  // Base 10 conversion
   String timestampString = String(buffer);
-
-  String encryptedStoragePassword = urlEncode(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt));
+  byte checksum = calculateChecksum(datastring);
+  String encryptedStoragePassword = urlEncode(simpleEncrypt(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt), salt, String((char)checksum)));
   url =  (String)url_get + "?key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=" + mode + "&data=" + datastring;
   //Serial.println(host_get);
   int attempts = 0;
@@ -724,9 +724,6 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
     connectionFailureMode = true;
  
   } else {
-    if(mode != "getInitialDeviceInfo") {
-      canSleep = true; //canSleep is a global and will not be set until all the tasks of the device are finished.
-    }
      connectionFailureTime = 0;
      connectionFailureMode = false;
      clientGet.println("GET " + url + " HTTP/1.1");
@@ -767,6 +764,7 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
       retLine.trim();
       if(retLine.indexOf("\"error:") < 0 && includesWeatherData) {
         lastDataLogTime = millis();
+        canSleep = true; //canSleep is a global and will not be set until all the tasks of the device are finished.
       }
       //Here the code is designed to be able to handle either JSON or double-delimited data from data.php
       //I started with just JSON, but that's a notoriously bulky data format, what with the names of all the
@@ -1177,6 +1175,15 @@ String simpleEncrypt(String plaintext, String key, String salt) {
     }
     return encrypted;
 }
+
+byte calculateChecksum(String input) {
+    byte checksum = 0;
+    for (int i = 0; i < input.length(); i++) {
+        checksum += input[i];
+    }
+    return checksum;
+}
+
 ///print utils -- comment-out as needed to keep serial line pure
 
 void feedbackPrint(int value){
