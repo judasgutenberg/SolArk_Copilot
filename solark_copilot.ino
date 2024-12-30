@@ -72,6 +72,8 @@ bool localSource = false;
 float measuredVoltage = 0;
 float measuredAmpage = 0;
 bool canSleep = false;
+long latencySum = 0;
+long latencyCount = 0;
 
 SimpleMap<String, int> *pinMap = new SimpleMap<String, int>([](String &a, String &b) -> int {
   if (a == b) return 0;      // a and b are equal
@@ -421,14 +423,7 @@ void postData(String datastring){
   HTTPClient http;
   String url;
   String mode = "debug";
-
-
-  int timeStamp = timeClient.getEpochTime();
-  char buffer[10];
-  itoa(timeStamp, buffer, 10);  // Base 10 conversion
-  String timestampString = String(buffer);
-  byte checksum = calculateChecksum(datastring);
-  String encryptedStoragePassword = urlEncode(simpleEncrypt(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt), salt, String((char)checksum)), false);
+  String encryptedStoragePassword = encryptStoragePassword(datastring);
   String allData = "key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=debug" + mode + "&data=" + urlEncode(datastring, true);
   url = "http://" + (String)host_get + ":" + String(httpGetPort) + url_get;
   
@@ -492,6 +487,10 @@ void loop() {
         
         dataToDisplay = dataToDisplay + "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|" + (int)lastCommandId + "**" + (int)localSource + "*" + ipAddressToUse + "*" + requestNonJsonPinInfo + "*1*" + changeSourceId;
         dataToDisplay = dataToDisplay + "*" +  timeClient.getEpochTime()  + "*" + millis();
+        dataToDisplay = dataToDisplay + "*";
+        if(latencyCount > 0) {
+          dataToDisplay = dataToDisplay + (1000 * latencySum)/latencyCount;
+        }
         dataToDisplay = dataToDisplay + "|*" + measuredVoltage + "*" + measuredAmpage; //if this device could timestamp data from its archives, it would put the numeric timetamp before measuredVoltage
         //dataToDisplay += + "*" + latitude + "*" + longitude; //not yet supported. might also include accelerometer data some day
         feedbackPrint(packetSize);
@@ -703,12 +702,7 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
     mode = "getInitialDeviceInfo";
   }
 
-  int timeStamp = timeClient.getEpochTime();
-  char buffer[10];
-  itoa(timeStamp, buffer, 10);  // Base 10 conversion
-  String timestampString = String(buffer);
-  byte checksum = calculateChecksum(datastring);
-  String encryptedStoragePassword = urlEncode(simpleEncrypt(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt), salt, String((char)checksum)), false);
+  String encryptedStoragePassword = encryptStoragePassword(datastring);
   url =  (String)url_get + "?key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=" + mode + "&data=" + urlEncode(datastring, true);
   //Serial.println(host_get);
   int attempts = 0;
@@ -720,7 +714,6 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
   if (attempts >= connection_retry_number) {
     connectionFailureTime = millis();
     connectionFailureMode = true;
- 
   } else {
      connectionFailureTime = 0;
      connectionFailureMode = false;
@@ -806,7 +799,16 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
         //receivedDataJson = true;
         break; 
       } else if(retLine.charAt(0) == '|') {
-        setLocalHardwareToServerStateFromNonJson((char *)retLine.c_str());
+        String serverCommandParts[2];
+        splitString(retLine, '!', serverCommandParts, 2);
+        setLocalHardwareToServerStateFromNonJson((char *)serverCommandParts[0].c_str());
+        if(retLine.indexOf("!") > -1) {
+          if(serverCommandParts[1].length()>5) { //just has latency data
+            //Serial.print("COMMAND (beside pin data): ");
+            //Serial.println(serverCommandParts[1]);
+          } 
+          runCommandsFromNonJson((char *)("!" + serverCommandParts[1]).c_str());
+        }
         receivedDataJson = true;
         break;   
       } else if(retLine.charAt(0) == '!') { //it's a command, so an exclamation point seems right
@@ -827,29 +829,36 @@ void runCommandsFromNonJson(char * nonJsonLine){
   String command;
   int commandId;
   String commandData;
-  String commandArray[3];
+  String commandArray[4];
+  int latency;
   //first get rid of the first character, since all it does is signal that we are receiving a command:
   nonJsonLine++;
   splitString(nonJsonLine, '|', commandArray, 3);
   commandId = commandArray[0].toInt();
   command = commandArray[1];
   commandData = commandArray[2];
-  if(command == "reboot") {
-    rebootEsp();
-  } else if(command == "one pin at a time") {
-    //onePinAtATimeMode = (boolean)commandData.toInt(); //setting a global.
-  } else if(command == "sleep seconds per loop") {
-    deep_sleep_time_per_loop = commandData.toInt(); //setting a global.
-  } else if(command == "snooze seconds per loop") {
-    light_sleep_time_per_loop = commandData.toInt(); //setting a global
-  } else if(command == "polling granularity") {
-    polling_granularity = commandData.toInt(); //setting a global.
-  } else if(command == "logging granularity") {
-    data_logging_granularity = commandData.toInt(); //setting a global.
-  } else if(command == "ir") {
-    sendIr(commandData); //ir data must be comma-delimited
+  latencyCount++;
+  latency = commandArray[3].toInt();
+  latencySum += latency;
+ 
+  if(commandId) {
+    if(command == "reboot") {
+      rebootEsp();
+    } else if(command == "one pin at a time") {
+      //onePinAtATimeMode = (boolean)commandData.toInt(); //setting a global.
+    } else if(command == "sleep seconds per loop") {
+      deep_sleep_time_per_loop = commandData.toInt(); //setting a global.
+    } else if(command == "snooze seconds per loop") {
+      light_sleep_time_per_loop = commandData.toInt(); //setting a global
+    } else if(command == "polling granularity") {
+      polling_granularity = commandData.toInt(); //setting a global.
+    } else if(command == "logging granularity") {
+      data_logging_granularity = commandData.toInt(); //setting a global.
+    } else if(command == "ir") {
+      sendIr(commandData); //ir data must be comma-delimited
+    }
+    lastCommandId = commandId;
   }
-  lastCommandId = commandId;
 }
 
 void sendIr(String rawDataStr) {
@@ -1180,6 +1189,17 @@ byte calculateChecksum(String input) {
         checksum += input[i];
     }
     return checksum;
+}
+
+
+String encryptStoragePassword(String datastring) {
+  int timeStamp = timeClient.getEpochTime();
+  char buffer[10];
+  itoa(timeStamp, buffer, 10);  // Base 10 conversion
+  String timestampString = String(buffer);
+  byte checksum = calculateChecksum(datastring);
+  String encryptedStoragePassword = urlEncode(simpleEncrypt(simpleEncrypt((String)storage_password, timestampString.substring(1,9), salt), "magic", String((char)checksum)), false);
+  return encryptedStoragePassword;
 }
 
 ///print utils -- comment-out as needed to keep serial line pure
