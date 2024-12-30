@@ -272,9 +272,7 @@ String weatherDataString(int sensor_id, int sensor_sub_type, int dataPin, int po
   static char buf[16];
   static uint16_t loopCounter = 0;  
   String transmissionString = "";
-  if(glblRemote) {
-    sensorName = urlEncode(sensorName);
-  }
+ 
   if(deviceFeatureId == NULL) {
     objectCursor = 0;
   }
@@ -430,8 +428,8 @@ void postData(String datastring){
   itoa(timeStamp, buffer, 10);  // Base 10 conversion
   String timestampString = String(buffer);
   byte checksum = calculateChecksum(datastring);
-  String encryptedStoragePassword = urlEncode(simpleEncrypt(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt), salt, String((char)checksum)));
-  String allData = "key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=debug" + mode + "&data=" + datastring;
+  String encryptedStoragePassword = urlEncode(simpleEncrypt(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt), salt, String((char)checksum)), false);
+  String allData = "key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=debug" + mode + "&data=" + urlEncode(datastring, true);
   url = "http://" + (String)host_get + ":" + String(httpGetPort) + url_get;
   
   http.begin(clientGet, url);
@@ -710,8 +708,8 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
   itoa(timeStamp, buffer, 10);  // Base 10 conversion
   String timestampString = String(buffer);
   byte checksum = calculateChecksum(datastring);
-  String encryptedStoragePassword = urlEncode(simpleEncrypt(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt), salt, String((char)checksum)));
-  url =  (String)url_get + "?key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=" + mode + "&data=" + datastring;
+  String encryptedStoragePassword = urlEncode(simpleEncrypt(simpleEncrypt((String)storage_password, timestampString.substring(0,8), salt), salt, String((char)checksum)), false);
+  url =  (String)url_get + "?key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=" + mode + "&data=" + urlEncode(datastring, true);
   //Serial.println(host_get);
   int attempts = 0;
   while(!clientGet.connect(host_get, httpGetPort) && attempts < connection_retry_number) {
@@ -1023,7 +1021,7 @@ void setLocalHardwareToServerStateFromNonJson(char * nonJsonLine){
 
 ///////////////////////////////////////////////
 void rebootEsp() {
-  Serial.println("Rebooting ESP");
+  feedbackSerial.print("Rebooting ESP");
   ESP.restart();
 }
 
@@ -1061,7 +1059,7 @@ void setPinValueOnSlave(char i2cAddress, char pinNumber, char pinValue) {
 /////////////////////////////////////////////
 //utility functions
 /////////////////////////////////////////////
-String urlEncode(String str) {
+String urlEncode(String str, bool minimizeImpact) {
   String encodedString = "";
   char c;
   char hexDigits[] = "0123456789ABCDEF"; // Hex conversion lookup
@@ -1069,7 +1067,7 @@ String urlEncode(String str) {
     c = str.charAt(i);
     if (c == ' ') {
       encodedString += "%20";
-    } else if (isalnum(c)) {
+    } else if (isalnum(c) || c == '.' || (minimizeImpact && ( c == '|'  || c == '*' ||  c == ','))) {
       encodedString += c;
     } else {
       encodedString += '%';
