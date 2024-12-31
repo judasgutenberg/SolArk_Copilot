@@ -1193,23 +1193,7 @@ byte calculateChecksum(String input) {
     }
     return checksum;
 }
-
-int countSetBitsInString(const String &input) {
-    int bitCount = 0;
-    // Iterate over each character in the string
-    for (size_t i = 0; i < input.length(); ++i) {
-        char c = input[i];
-        
-        // Count the set bits in the ASCII value of the character
-        for (int bit = 0; bit < 8; ++bit) {
-            if (c & (1 << bit)) {
-                bitCount++;
-            }
-        }
-    }
-
-    return bitCount;
-}
+ 
 
 byte countSetBitsInString(const String &input) {
     byte bitCount = 0;
