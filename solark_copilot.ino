@@ -1,3 +1,4 @@
+
 //Gus Mueller, June 29, 2024
 //uses an ESP8266 wired with the swap serial pins (D8 as TX and D7 as RX) connected to the exposed serial header on the ESP32 in the SolArk's WiFi dongle.
 //this intercepts the communication data between the SolArk and the dongle to get frequent updates (that is, every few seconds) of the power and battery levels.
@@ -113,14 +114,14 @@ void setup() {
   startWeatherSensors(sensor_id, sensor_sub_type, sensor_i2c, sensor_data_pin, sensor_power_pin);
   timeClient.begin();
   timeClient.setTimeOffset(0);
-  Serial.println("about to swap");
-  delay(4000);
-  Serial.swap();
+
   if(ina219_address > -1) {
+    Serial.println("Looking for voltage monitor...");
     ina219 = new Adafruit_INA219(ina219_address);
     if (!ina219->begin()) {
+      Serial.println("No voltage monitor");
     } else {
-      ina219->setCalibration_16V_400mA();
+      //ina219->setCalibration_16V_400mA();
     }
   }
   if(ina219_address_a > -1) {
@@ -133,6 +134,9 @@ void setup() {
     if (!ina219b->begin()) {
     }
   }
+  Serial.println("about to swap");
+  delay(4000);
+  Serial.swap();
   feedbackSerial.begin(115200);
 }
 
@@ -153,18 +157,6 @@ void lookupLocalPowerData() {//sets the globals with the current reading from th
   loadvoltage = busvoltage + (shuntvoltage / 1000);
   measuredVoltage = loadvoltage;
   measuredAmpage = current_mA;
-  /*
-  Serial.print("volt: ");
-  Serial.print(measuredVoltage);
-  Serial.print(" amp: ");
-  Serial.println(measuredAmpage);
-  Serial.print("Bus Voltage:   "); Serial.print(busvoltage); Serial.println(" V");
-  Serial.print("Shunt Voltage: "); Serial.print(shuntvoltage); Serial.println(" mV");
-  Serial.print("Load Voltage:  "); Serial.print(loadvoltage); Serial.println(" V");
-  Serial.print("Current:       "); Serial.print(current_mA); Serial.println(" mA");
-  Serial.print("Power:         "); Serial.print(power_mW); Serial.println(" mW");
-  Serial.println("");
-  */
 }
 
 String additionalPowerData() {//used for reading the voltages on the solar strings, since i can't get those from the solark itself
@@ -435,6 +427,7 @@ void postData(String datastring){
  
 void loop() {
   // send data only when you receive data:
+  
   char incomingByte = ' ';
   String startValidIndication = "MB_real data,seg_cnt:3\r\r";
   long nowTime = millis();
@@ -442,6 +435,7 @@ void loop() {
     for(int i=0; i <4; i++) { //doing this four times here is helpful to make web service reasonably responsive. once is not enough
       server.handleClient();
     }
+    //lookupLocalPowerData();
   }
  
     
@@ -515,6 +509,7 @@ void loop() {
       totalSerialChars = 0;
       goodDataMode = true;   
     }
+    
     if(canSleep) {
       //this will only work if GPIO16 (D2 on a WEMOS D1) and EXT_RSTB are wired together. see https://www.electronicshub.org/esp8266-deep-sleep-mode/
       if(deep_sleep_time_per_loop > 0) {
@@ -530,6 +525,7 @@ void loop() {
       wiFiConnect();
     }
   }
+  
   timeClient.update();
 }
 
@@ -703,7 +699,7 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
   }
 
   String encryptedStoragePassword = encryptStoragePassword(datastring);
-  url =  (String)url_get + "?key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=" + mode + "&data=" + urlEncode(datastring, true);
+  url =  (String)url_get + "?key=" + encryptedStoragePassword + "&device_id=" + device_id + "&mode=" + mode + "&data=" + urlEncode(datastring, true);
   //Serial.println(host_get);
   int attempts = 0;
   while(!clientGet.connect(host_get, httpGetPort) && attempts < connection_retry_number) {
@@ -753,7 +749,8 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
       receivedData = true;
       String retLine = clientGet.readStringUntil('\n');
       retLine.trim();
-      if(retLine.indexOf("\"error:") < 0 && includesWeatherData) {
+      if(retLine.indexOf("error") < 0 && includesWeatherData && (retLine.charAt(0)== '{' || retLine.charAt(0)== '*' || retLine.charAt(0)== '|' || retLine.charAt(0)== '|')) {
+       
         lastDataLogTime = millis();
         canSleep = true; //canSleep is a global and will not be set until all the tasks of the device are finished.
       }
