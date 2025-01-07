@@ -749,7 +749,7 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
       receivedData = true;
       String retLine = clientGet.readStringUntil('\n');
       retLine.trim();
-      if(retLine.indexOf("error") < 0 && includesWeatherData && (retLine.charAt(0)== '{' || retLine.charAt(0)== '*' || retLine.charAt(0)== '|' || retLine.charAt(0)== '|')) {
+      if(retLine.indexOf("\"error\":") < 0 && includesWeatherData && (retLine.charAt(0)== '{' || retLine.charAt(0)== '*' || retLine.charAt(0)== '|' || retLine.charAt(0)== '|')) {
        
         lastDataLogTime = millis();
         canSleep = true; //canSleep is a global and will not be set until all the tasks of the device are finished.
