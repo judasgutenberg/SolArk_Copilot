@@ -36,3 +36,5 @@ extern const int ir_pin;
 extern const int ina219_address;
 extern const int ina219_address_a;
 extern const int ina219_address_b;
+
+extern const int time_of_flight_address;
