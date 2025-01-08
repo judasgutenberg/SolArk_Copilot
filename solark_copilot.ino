@@ -15,6 +15,7 @@
 #include <IRsend.h>
 #include <Adafruit_INA219.h>
 #include <Adafruit_VL53L0X.h>
+#include <Adafruit_ADT7410.h>
 
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 
@@ -39,6 +40,7 @@ Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 //amusingly, this barely ate into memory at all
 //since many I2C sensors only permit two sensors per I2C bus, you could reduce the size of these object arrays
 //and so i've dropped some of these down to 2
+Adafruit_ADT7410 adt7410[4];
 DHT* dht[6];
 Adafruit_AHTX0 AHT[2];
 SFE_BMP180 BMP180[2];
@@ -241,6 +243,13 @@ void startWeatherSensors(int sensorIdLocal, int sensorSubTypeLocal, int i2c, int
     } else {
       Serial.println("Didn't find AHT20");
     } 
+  } else if (sensorIdLocal == 7410) { //adt7410
+    adt7410[objectCursor].begin(i2c);
+    adt7410[objectCursor].setResolution(ADT7410_16BIT);
+  } else if(sensor_id == 7410) {  
+    temperatureValue = adt7410[objectCursor].readTempC();
+    humidityValue = NULL;
+    pressureValue = NULL;
   } else if (sensorIdLocal == 180) { //BMP180
     BMP180[objectCursor].begin();
   } else if (sensorIdLocal == 85) { //BMP085
@@ -379,16 +388,13 @@ String weatherDataString(int sensor_id, int sensor_sub_type, int dataPin, int po
           // Function returns 1 if successful, 0 if failure.
           status = BMP180[objectCursor].getPressure(pressureValue,temperatureValue);
           if (status == 0) {
-            Serial.println("error retrieving pressure measurement\n");
           }
         } else {
-          Serial.println("error starting pressure measurement\n");
         }
       } else {
-        Serial.println("error retrieving temperature measurement\n");
       }
     } else {
-      Serial.println("error starting temperature measurement\n");
+
     }
     humidityValue = NULL; //really should set unknown values as null
   } else if (sensor_id == 85) {
