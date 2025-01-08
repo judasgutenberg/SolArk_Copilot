@@ -1,4 +1,5 @@
 
+
 //Gus Mueller, June 29, 2024
 //uses an ESP8266 wired with the swap serial pins (D8 as TX and D7 as RX) connected to the exposed serial header on the ESP32 in the SolArk's WiFi dongle.
 //this intercepts the communication data between the SolArk and the dongle to get frequent updates (that is, every few seconds) of the power and battery levels.
@@ -13,6 +14,9 @@
 #include <IRremoteESP8266.h>
 #include <IRsend.h>
 #include <Adafruit_INA219.h>
+#include <Adafruit_VL53L0X.h>
+
+Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 
 #include <NTPClient.h>
 #include <WiFiUdp.h>
@@ -132,6 +136,11 @@ void setup() {
   if(ina219_address_b > -1) {
     ina219b = new Adafruit_INA219(ina219_address_b);
     if (!ina219b->begin()) {
+    }
+  }
+  if(time_of_flight_address > 0) {
+    if(!lox.begin()) {
+      Serial.println(F("Failed to boot VL53L0X"));
     }
   }
   Serial.println("about to swap");
@@ -436,6 +445,15 @@ void loop() {
       server.handleClient();
     }
     //lookupLocalPowerData();
+    if(time_of_flight_address > 0) {
+      VL53L0X_RangingMeasurementData_t measure;
+      lox.rangingTest(&measure, false); // pass in 'true' to get debug data printout!
+      if (measure.RangeStatus != 4) {  // phase failures have incorrect data
+        distance = measure.RangeMilliMeter;
+      } else {
+        distance = -1;
+      }
+    }
   }
  
     
