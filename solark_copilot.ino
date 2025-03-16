@@ -456,7 +456,7 @@ void postData(String datastring){
   String url;
   String mode = "debug";
   String encryptedStoragePassword = encryptStoragePassword(datastring);
-  String allData = "key=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=debug" + mode + "&data=" + urlEncode(datastring, true);
+  String allData = "k2=" + encryptedStoragePassword + "&locationId=" + device_id + "&mode=debug" + mode + "&data=" + urlEncode(datastring, true);
   url = "http://" + (String)host_get + ":" + String(httpGetPort) + url_get;
   
   http.begin(clientGet, url);
@@ -740,7 +740,7 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
   }
 
   String encryptedStoragePassword = encryptStoragePassword(datastring);
-  url =  (String)url_get + "?key=" + encryptedStoragePassword + "&device_id=" + device_id + "&mode=" + mode + "&data=" + urlEncode(datastring, true);
+  url =  (String)url_get + "?k2=" + encryptedStoragePassword + "&device_id=" + device_id + "&mode=" + mode + "&data=" + urlEncode(datastring, true);
   //Serial.println(host_get);
   int attempts = 0;
   while(!clientGet.connect(host_get, httpGetPort) && attempts < connection_retry_number) {
@@ -997,7 +997,6 @@ void handleWeatherData() {
 //i've made it so the ESP8266 can receive data in either format. it takes the lead on specifying which format it prefers
 //but if it misbehaves, i can force it to be one format or the other remotely 
 void setLocalHardwareToServerStateFromNonJson(char * nonJsonLine){
-  //return;
   int pinNumber = 0;
   String key;
   int value = -1;
@@ -1011,13 +1010,11 @@ void setLocalHardwareToServerStateFromNonJson(char * nonJsonLine){
   String nonJsonPinDatum[5];
   String pinIdParts[2];
   char i2c = 0;
-  feedbackPrint(nonJsonLine);
-  //return;
   splitString(nonJsonLine, '|', nonJsonPinArray, 12);
   int foundPins = 0;
+  //pinMap->clear();
   for(int i=1; i<12; i++) {
     nonJsonDatumString = nonJsonPinArray[i];
-    //Serial.println(nonJsonDatumString);
     if(nonJsonDatumString.indexOf('*')>-1) {  
       splitString(nonJsonDatumString, '*', nonJsonPinDatum, 5);
       key = nonJsonPinDatum[1];
@@ -1026,6 +1023,7 @@ void setLocalHardwareToServerStateFromNonJson(char * nonJsonLine){
       pinName[foundPins] = friendlyPinName;
       canBeAnalog = nonJsonPinDatum[3].toInt();
       serverSaved = nonJsonPinDatum[4].toInt();
+
       if(key.indexOf('.')>0) {
         splitString(key, '.', pinIdParts, 2);
         i2c = pinIdParts[0].toInt();
@@ -1033,28 +1031,33 @@ void setLocalHardwareToServerStateFromNonJson(char * nonJsonLine){
       } else {
         pinNumber = key.toInt();
       }
-      
-      //Serial.println("!ABOUT TO TURN OF localsource: " + (String)localSource +  " serverSAVED: " + (String)serverSaved);
+      //Serial.println("!ABOUT TO TURN OFF localsource: " + (String)localSource +  " serverSAVED: " + (String)serverSaved);
       if(!localSource || serverSaved == 1){
         if(serverSaved == 1) {//confirmation of serverSaved, so localSource flag is no longer needed
-          //Serial.println("SERVER SAVED==1!!");
+          if(debug) {
+            Serial.println("SERVER SAVED==1!!");
+          }
           localSource = false;
         } else {
           pinMap->remove(key);
           pinMap->put(key, value);
+          //Serial.print(key);
+          //Serial.print(": ");
+          //Serial.println(pinMap->getIndex(key));
         }
       }
-      
       pinList[foundPins] = key;
-      //return; //pinMode causes serial probs!!
       pinMode(pinNumber, OUTPUT);
-      //return;
       if(i2c > 0) {
+        //Serial.print("Non-JSON i2c: ");
+        //Serial.println(key);
         setPinValueOnSlave(i2c, (char)pinNumber, (char)value); 
       } else {
         if(canBeAnalog) {
           analogWrite(pinNumber, value);
         } else {
+          //Serial.print("Non-JSON reg: ");
+          //Serial.println(key);
           if(value > 0) {
             digitalWrite(pinNumber, HIGH);
           } else {
@@ -1062,14 +1065,12 @@ void setLocalHardwareToServerStateFromNonJson(char * nonJsonLine){
           }
         }
       }
+      foundPins++;
     }
-    foundPins++;
+    
   }
   pinTotal = foundPins;
 }
-
-
-
 
 ///////////////////////////////////////////////
 void rebootEsp() {
@@ -1141,11 +1142,13 @@ String joinValsOnDelimiter(long vals[], String delimiter, int numberToDo) {
   return out;
 }
 
-String joinMapValsOnDelimiter(SimpleMap<String, int> *mapIn, String delimiter, int numberToDo) {
+String joinMapValsOnDelimiter(SimpleMap<String, int> *pinMap, String delimiter) {
   String out = "";
-  for (int i = 0; i < mapIn->size(); i++) {
-    out = out + (String)mapIn->getData(i);
-    if(i < numberToDo-1) {
+  for (int i = 0; i < pinMap->size(); i++) {
+    //i had to rework this because pinMap was saving out of order in some cases
+    String key = pinList[i];
+    out = out + (String)pinMap->get(key);
+    if(i < pinMap->size()- 1) {
       out = out + delimiter;
     }
   }
@@ -1236,23 +1239,6 @@ String replaceNthElement(const String& input, int n, const String& replacement, 
   return result;
 }
 
-String simpleEncrypt(String plaintext, String key, String salt) {
-    String encrypted = "";
-    int keyLength = key.length();
-    int saltLength = salt.length();
-    int plainLength = plaintext.length();
-
-    for (int i = 0; i < plainLength; i++) {
-        // Combine plaintext, key, and salt using positions
-        char mix = plaintext[i] 
-                   ^ key[i % keyLength] 
-                   ^ salt[i % saltLength];
-        // Further scramble by shifting based on position
-        mix = (mix << (i % 5)) | (mix >> (8 - (i % 5))); // Circular bit shift
-        encrypted += mix;
-    }
-    return encrypted;
-}
 
 byte calculateChecksum(String input) {
     byte checksum = 0;
@@ -1261,7 +1247,6 @@ byte calculateChecksum(String input) {
     }
     return checksum;
 }
- 
 
 byte countSetBitsInString(const String &input) {
     byte bitCount = 0;
@@ -1279,7 +1264,23 @@ byte countSetBitsInString(const String &input) {
     return bitCount;
 }
 
-String encryptStoragePassword(String datastring) {
+
+byte countZeroes(const String &input) {
+    byte zeroCount = 0;
+    // Iterate over each character in the string
+    for (size_t i = 0; i < input.length(); ++i) {
+        char c = input[i];
+        // Count the zeroes
+        if (c == 48) {
+            zeroCount++;
+        }
+   
+    }
+    return zeroCount;
+}
+
+/*
+String oldEncryptStoragePassword(String datastring) {
   int timeStamp = timeClient.getEpochTime();
   char buffer[10];
   itoa(timeStamp, buffer, 10);  // Base 10 conversion
@@ -1288,6 +1289,167 @@ String encryptStoragePassword(String datastring) {
   String encryptedStoragePassword = urlEncode(simpleEncrypt(simpleEncrypt((String)storage_password, timestampString.substring(1,9), salt), String((char)countSetBitsInString(datastring)), String((char)checksum)), false);
   return encryptedStoragePassword;
 }
+*/
+
+uint8_t rotateLeft(uint8_t value, uint8_t count) {
+    return (value << count) | (value >> (8 - count));
+}
+
+uint8_t rotateRight(uint8_t value, uint8_t count) {
+    return (value >> count) | (value << (8 - count));
+}
+
+//let's define how encryption_scheme works:
+//a data_string is passed in as is the storage_password.  we want to be able to recreate the storage_password server-side, so no can be lossy on the storage_password
+//it's all based on nibbles. two operations are performed by byte from these two nibbles, upper nibble first, then lower nibble
+//00: do nothing (byte unchanged)
+//01: xor storage_password at this position with count_of_zeroes in dataString
+//02: xor between storage_password at this position and timestampString at this position.
+//03: xor between storage_password at this position and data_string  at this position.
+//04: xor storage_password with ROL data_string at this position
+//05: xor storage_password with ROR data_string at this position
+//06: xor storage_password with checksum of entire data_string;
+//07: xor storage_password with checksum of entire stringified timestampString
+//08: xor storage_password with set_bits of entire data_string
+//09  xor storage_password with set_bits in entire timestampString
+//10: ROL this position of storage_password 
+//11: ROR this position of storage_password 
+//12: ROL this position of storage_password twice
+//13: ROR this position of storage_password twice
+//14: invert byte of storage_password at this position (zeroes become ones and ones become zeroes)
+//15: xor storage_password at this position with count_of_zeroes in full timestampString
+String encryptStoragePassword(String datastring) {
+    int timeStamp = timeClient.getEpochTime();
+    char buffer[10];
+    itoa(timeStamp, buffer, 10);  // Convert timestamp to string
+    String timestampStringInterim = String(buffer);
+    String timestampString = timestampStringInterim.substring(1,8); //second param is OFFSET
+    //Serial.print(timestampString);
+    //Serial.println("<=known to frontend");
+    //timestampString = "0123227";
+    // Convert encryption_scheme into an array of nibbles
+    uint8_t nibbles[16];  // 64-bit number has 16 nibbles
+    for (int i = 0; i < 16; i++) {
+        nibbles[i] = (encryption_scheme >> (4 * (15 - i))) & 0xF;  // Extract nibble
+    }
+    // Process nibbles
+    String processedString = "";
+    int counter = 0;
+    uint8_t thisByteResult;
+    uint8_t thisByteOfStoragePassword;
+    uint8_t thisByteOfDataString;
+    uint8_t thisByteOfTimestampString;
+    uint8_t dataStringChecksum = calculateChecksum(datastring);
+    uint8_t timestampStringChecksum = calculateChecksum(timestampString);
+    uint8_t dataStringSetBits = countSetBitsInString(datastring);
+    uint8_t timestampStringSetBits = countSetBitsInString(timestampString);
+    uint8_t dataStringZeroCount = countZeroes(datastring);
+    uint8_t timestampStringZeroCount = countZeroes(timestampString);
+    for (int i = 0; i < strlen(storage_password) * 2; i++) {
+  
+        thisByteOfDataString = datastring[counter % datastring.length()];
+        thisByteOfTimestampString = timestampString[counter % timestampString.length()];
+        /*
+        Serial.print(timestampString);
+        Serial.print(":");
+        Serial.print(timestampString[counter % timestampString.length()]);
+        Serial.print(":");
+        Serial.print(counter);
+        Serial.print(":");
+        Serial.println(counter % timestampString.length());
+        */
+        if(i % 2 == 0) {
+          thisByteOfStoragePassword = storage_password[counter];
+        } else {
+          thisByteOfStoragePassword = thisByteResult;
+        }
+        uint8_t nibble = nibbles[i % 16];
+        if(nibble == 0) {
+          //do nothing
+        } else if(nibble == 1) { 
+          thisByteResult = thisByteOfStoragePassword ^ dataStringZeroCount;
+        } else if(nibble == 2) { 
+          thisByteResult = thisByteOfStoragePassword ^ thisByteOfTimestampString;
+        } else if(nibble == 3) { 
+          thisByteResult = thisByteOfStoragePassword ^ thisByteOfDataString;
+        } else if(nibble == 4) { 
+          thisByteResult = thisByteOfStoragePassword ^ rotateLeft(thisByteOfDataString, 1);
+        } else if(nibble == 5) { 
+          thisByteResult = thisByteOfStoragePassword ^ rotateRight(thisByteOfDataString, 1);
+        } else if(nibble == 6) { 
+          thisByteResult = thisByteOfStoragePassword ^ dataStringChecksum;
+        } else if(nibble == 7) { 
+          thisByteResult = thisByteOfStoragePassword ^ timestampStringChecksum;
+        } else if(nibble == 8) { 
+          thisByteResult = thisByteOfStoragePassword ^ dataStringSetBits;
+        } else if(nibble == 9) { 
+          thisByteResult = thisByteOfStoragePassword ^ timestampStringSetBits;
+        } else if(nibble == 10) { 
+          thisByteResult = rotateLeft(thisByteOfStoragePassword, 1);
+        } else if(nibble == 11) { 
+          thisByteResult = rotateRight(thisByteOfStoragePassword, 1);
+        } else if(nibble == 12) { 
+          thisByteResult = rotateLeft(thisByteOfStoragePassword, 2);
+        } else if(nibble == 13) { 
+          thisByteResult = rotateRight(thisByteOfStoragePassword, 2);
+        } else if(nibble == 14) { 
+          thisByteResult = ~thisByteOfStoragePassword; //invert the byte
+        } else if(nibble == 15) { 
+          thisByteResult = thisByteOfStoragePassword ^ timestampStringZeroCount;
+        }
+        
+        // Advance the counter every other nibble
+        
+        if (i % 2 == 1) {
+            char hexStr[3];
+            sprintf(hexStr, "%02X", thisByteResult); 
+            String paddedHexStr = String(hexStr); 
+            processedString += paddedHexStr;  // Append nibble as hex character
+            /*
+            Serial.print("%");
+            Serial.print(thisByteOfStoragePassword);
+            Serial.print(",");
+            Serial.print(thisByteOfDataString);
+            Serial.print("|");
+            Serial.print(thisByteOfTimestampString);
+            Serial.print("|");
+            Serial.print(dataStringZeroCount);
+            Serial.print("|");
+            Serial.print(timestampStringZeroCount);
+            Serial.print(" via: ");
+            Serial.print(nibble);
+            Serial.print("=>");
+            Serial.println(thisByteResult);
+            */
+            counter++;
+        } else {
+            /*
+            Serial.print("&");
+            Serial.print(thisByteOfStoragePassword);
+            Serial.print(",");
+            Serial.print(thisByteOfDataString);
+            Serial.print("|");
+            Serial.print(thisByteOfTimestampString);
+            Serial.print("|");
+            Serial.print(dataStringZeroCount);
+            Serial.print("|");
+            Serial.print(timestampStringZeroCount);
+            Serial.print(" via: ");
+            Serial.print(nibble);
+            Serial.print("=>");
+            Serial.println(thisByteResult);
+            */
+            
+        }
+        //Serial.print(":");
+    }
+    return processedString;
+}
+
+
+
+
+
 ///print utils -- comment-out as needed to keep serial line pure
 
 void feedbackPrint(int value){
