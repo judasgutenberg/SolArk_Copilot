@@ -520,7 +520,7 @@ void loop() {
            changeSourceId = 1;
         }
         
-        dataToDisplay = dataToDisplay + "||" + joinMapValsOnDelimiter(pinMap, "*", pinTotal) + "|" + (int)lastCommandId + "**" + (int)localSource + "*" + ipAddressToUse + "*" + requestNonJsonPinInfo + "*1*" + changeSourceId;
+        dataToDisplay = dataToDisplay + "||" + joinMapValsOnDelimiter(pinMap, "*") + "|" + (int)lastCommandId + "**" + (int)localSource + "*" + ipAddressToUse + "*" + requestNonJsonPinInfo + "*1*" + changeSourceId;
         dataToDisplay = dataToDisplay + "*" +  timeClient.getEpochTime()  + "*" + millis();
         dataToDisplay = dataToDisplay + "*";
         if(latencyCount > 0) {
