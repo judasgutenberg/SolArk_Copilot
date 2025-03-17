@@ -81,7 +81,7 @@ float measuredAmpage = 0;
 bool canSleep = false;
 long latencySum = 0;
 long latencyCount = 0;
- 
+bool debug = false;
 
 SimpleMap<String, int> *pinMap = new SimpleMap<String, int>([](String &a, String &b) -> int {
   if (a == b) return 0;      // a and b are equal
