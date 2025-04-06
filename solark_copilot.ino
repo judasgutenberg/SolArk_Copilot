@@ -121,14 +121,12 @@ void setup() {
   startWeatherSensors(sensor_id, sensor_sub_type, sensor_i2c, sensor_data_pin, sensor_power_pin);
   timeClient.begin();
   timeClient.setTimeOffset(0);
-
-  if(ina219_address > -1) {
-    Serial.println("Looking for voltage monitor...");
+  if(ina219_address > 0) {
     ina219 = new Adafruit_INA219(ina219_address);
     if (!ina219->begin()) {
-      Serial.println("No voltage monitor");
+      Serial.println("Failed to find INA219 chip");
     } else {
-      //ina219->setCalibration_16V_400mA();
+      ina219->setCalibration_16V_400mA();
     }
   }
   if(ina219_address_a > -1) {
@@ -149,7 +147,7 @@ void setup() {
 }
 
 void lookupLocalPowerData() {//sets the globals with the current reading from the ina219
-  if(ina219_address < 0) { //if we don't have a ina219 then do not bother
+  if(ina219_address < 1) { //if we don't have a ina219 then do not bother
     return;
   }
   float shuntvoltage = 0;
@@ -157,7 +155,7 @@ void lookupLocalPowerData() {//sets the globals with the current reading from th
   float current_mA = 0;
   float loadvoltage = 0;
   float power_mW = 0;
-
+  cleanup();
   shuntvoltage = ina219->getShuntVoltage_mV();
   busvoltage = ina219->getBusVoltage_V();
   current_mA = ina219->getCurrent_mA();
@@ -179,14 +177,14 @@ String additionalPowerData() {//used for reading the voltages on the solar strin
   float loadvoltageb = 0;
   float power_mWb = 0;
 
-  if(ina219_address_a > -1) {
+  if(ina219_address_a > 0) {
     shuntvoltagea = ina219a->getShuntVoltage_mV();
     busvoltagea = ina219a->getBusVoltage_V();
     current_mAa = ina219a->getCurrent_mA();
     power_mWa = ina219a->getPower_mW();
     loadvoltagea = busvoltagea + (shuntvoltagea / 1000);
   }
-  if(ina219_address_b > -1) {
+  if(ina219_address_b > 0) {
     shuntvoltageb = ina219b->getShuntVoltage_mV();
     busvoltageb = ina219b->getBusVoltage_V();
     current_mAb = ina219b->getCurrent_mA();
@@ -790,7 +788,7 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
       receivedData = true;
       String retLine = clientGet.readStringUntil('\n');
       retLine.trim();
-      if(retLine.indexOf("\"error\":") < 0 && includesWeatherData && (retLine.charAt(0)== '{' || retLine.charAt(0)== '*' || retLine.charAt(0)== '|' || retLine.charAt(0)== '|')) {
+      if(retLine.indexOf("\"error\":") < 0 && includesWeatherData && (retLine.charAt(0)== '{' || retLine.charAt(0)== '*' || retLine.charAt(0)== '|')) {
        
         lastDataLogTime = millis();
         canSleep = true; //canSleep is a global and will not be set until all the tasks of the device are finished.
@@ -1448,7 +1446,10 @@ String encryptStoragePassword(String datastring) {
 
 
 
-
+void cleanup(){
+  ESP.getFreeHeap(); // This sometimes triggers internal cleanup
+  yield();    
+}
 
 ///print utils -- comment-out as needed to keep serial line pure
 
