@@ -82,6 +82,8 @@ bool canSleep = false;
 long latencySum = 0;
 long latencyCount = 0;
 bool debug = false;
+uint8_t outputMode = 0;
+String responseBuffer = "";
 
 SimpleMap<String, int> *pinMap = new SimpleMap<String, int>([](String &a, String &b) -> int {
   if (a == b) return 0;      // a and b are equal
@@ -565,6 +567,10 @@ void loop() {
     }
   }
   
+  if(responseBuffer != "") {
+    sendRemoteData(responseBuffer, "commandout", false);
+  }
+  
   timeClient.update();
 }
 
@@ -791,7 +797,10 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
       if(retLine.indexOf("\"error\":") < 0 && includesWeatherData && (retLine.charAt(0)== '{' || retLine.charAt(0)== '*' || retLine.charAt(0)== '|')) {
        
         lastDataLogTime = millis();
-        canSleep = true; //canSleep is a global and will not be set until all the tasks of the device are finished.
+        canSleep = true;  //canSleep is a global and will not be set until all the tasks of the device are finished.
+        //also we can switch outputMode to 0 and clear responseBuffer
+        outputMode = 0;
+        responseBuffer = "";
       }
       //Here the code is designed to be able to handle either JSON or double-delimited data from data.php
       //I started with just JSON, but that's a notoriously bulky data format, what with the names of all the
@@ -876,7 +885,9 @@ void runCommandsFromNonJson(char * nonJsonLine){
   latencyCount++;
   latency = commandArray[3].toInt();
   latencySum += latency;
- 
+  if(commandId == -2) {
+    outputMode = 2;
+  }
   if(commandId) {
     if(command == "reboot") {
       rebootEsp();
@@ -893,6 +904,18 @@ void runCommandsFromNonJson(char * nonJsonLine){
     } else if(command == "clear latency average") {
       latencyCount = 0;
       latencySum = 0;
+    } else if (command ==  "get uptime") {
+      textOut("Last booted: " + timeAgo("") + "\n");
+    } else if (command ==  "get lastpoll") {
+      //textOut("Last poll: " + msTimeAgo(lastPoll) + "\n");
+    } else if (command ==  "get lastdatalog") {
+      textOut("Last data: " + msTimeAgo(lastDataLogTime) + "\n");
+    } else if (command == "get memory") {
+      dumpMemoryStats(0);
+    } else if (command == "set debug") {
+      debug = true;
+    } else if (command == "clear debug") {
+      debug = false;
     } else if(command == "ir") {
       sendIr(commandData); //ir data must be comma-delimited
     }
@@ -1107,9 +1130,111 @@ void setPinValueOnSlave(char i2cAddress, char pinNumber, char pinValue) {
   Wire.endTransmission();
 }
 
+time_t parseDateTime(String dateTime) {
+    int year, month, day, hour, minute, second;
+    
+    // Convert String to C-style char* for parsing
+    if (sscanf(dateTime.c_str(), "%d-%d-%d %d:%d:%d", &year, &month, &day, &hour, &minute, &second) != 6) {
+        return 0; // Return 0 if parsing fails
+    }
+
+    struct tm t = {};
+    t.tm_year = year - 1900;
+    t.tm_mon = month - 1;
+    t.tm_mday = day;
+    t.tm_hour = hour;
+    t.tm_min = minute;
+    t.tm_sec = second;
+    
+    return mktime(&t); // Convert struct tm to Unix timestamp
+}
+
+
+String msTimeAgo(long millisFromPast) {
+  humanReadableTimespan((uint32_t) (millis() - millisFromPast));
+}
+ 
+// Overloaded version: Uses NTP time as the default comparison
+String timeAgo(String sqlDateTime) {
+    return timeAgo(sqlDateTime, timeClient.getEpochTime());
+}
+
+// Returns a human-readable "time ago" string
+String timeAgo(String sqlDateTime, time_t compareTo) {
+    time_t past;
+    time_t nowTime;
+
+    if (sqlDateTime.length() == 0) {
+        // If an empty string is passed, use millis() for uptime
+        unsigned long uptimeSeconds = millis() / 1000;
+        nowTime = uptimeSeconds;
+        past = 0;
+    } else {
+        past = parseDateTime(sqlDateTime);
+        nowTime = compareTo;
+    }
+
+    if (past == -1 || past > nowTime) {
+        return "Invalid time";
+    }
+
+    time_t diffInSeconds = nowTime - past;
+    return humanReadableTimespan((uint32_t) diffInSeconds);
+}
+
+String humanReadableTimespan(uint32_t diffInSeconds) {
+    int seconds = diffInSeconds % 60;
+    int minutes = (diffInSeconds / 60) % 60;
+    int hours = (diffInSeconds / 3600) % 24;
+    int days = diffInSeconds / 86400;
+
+    if (days > 0) {
+        return String(days) + (days == 1 ? " day ago" : " days ago");
+    }
+    if (hours > 0) {
+        return String(hours) + (hours == 1 ? " hour ago" : " hours ago");
+    }
+    if (minutes > 0) {
+        return String(minutes) + (minutes == 1 ? " minute ago" : " minutes ago");
+    }
+    return String(seconds) + (seconds == 1 ? " second ago" : " seconds ago");
+}
+
+
 /////////////////////////////////////////////
 //utility functions
 /////////////////////////////////////////////
+void textOut(String data){
+  if(outputMode == 2) {
+    //sendRemoteData(data, "commandout", 0xFFFF); //do this in loop, not now
+    responseBuffer += data;
+  } else {
+    feedbackPrint(data);
+  }
+}
+
+
+int freeMemory() {
+    return ESP.getFreeHeap();
+}
+
+String makeAsteriskString(uint8_t number){
+  String out = "";
+  for(uint8_t i=0; i<number; i++) {
+    out += "*";
+  }
+  return out;
+}
+
+
+void dumpMemoryStats(int marker){
+  char buffer[80]; 
+  sprintf(buffer, "Memory (%d): Free=%d, MaxBlock=%d, Fragmentation=%d%%\n", marker,
+                  ESP.getFreeHeap(), ESP.getMaxFreeBlockSize(),
+                  100 - (ESP.getMaxFreeBlockSize() * 100 / ESP.getFreeHeap()));
+  textOut(String(buffer));
+}
+
 String urlEncode(String str, bool minimizeImpact) {
   String encodedString = "";
   char c;
