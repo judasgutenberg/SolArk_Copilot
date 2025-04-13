@@ -568,7 +568,7 @@ void loop() {
   }
   
   if(responseBuffer != "") {
-    sendRemoteData(responseBuffer, "commandout", false);
+    sendRemoteData(responseBuffer, "commandout", true);
   }
   
   timeClient.update();
