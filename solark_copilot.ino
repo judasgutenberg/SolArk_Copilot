@@ -1,6 +1,6 @@
 
 
-//Gus Mueller, June 29, 2024
+//Gus Mueller, June 29, 2024  - July 26, 2025
 //uses an ESP8266 wired with the swap serial pins (D8 as TX and D7 as RX) connected to the exposed serial header on the ESP32 in the SolArk's WiFi dongle.
 //this intercepts the communication data between the SolArk and the dongle to get frequent updates (that is, every few seconds) of the power and battery levels.
 //the data still makes it to PowerView (now MySolArk) but you have access to it much sooner, locally, and at much finer granularity
@@ -471,6 +471,11 @@ void loop() {
   char incomingByte = ' ';
   String startValidIndication = "MB_real data,seg_cnt:3\r\r";
   long nowTime = millis();
+
+  if((nowTime - lastDataLogTime)/1000 > 1000 || (lastDataLogTime > nowTime && lastDataLogTime >0)){
+    //if we overflow millis() or it's been more than 1000 seconds since communication, reboot ESP
+    rebootEsp();
+  }
   if(!goodDataMode) {
     for(int i=0; i <4; i++) { //doing this four times here is helpful to make web service reasonably responsive. once is not enough
       server.handleClient();
@@ -898,7 +903,7 @@ void runCommandsFromNonJson(char * nonJsonLine){
     } else if(command == "snooze seconds per loop") {
       light_sleep_time_per_loop = commandData.toInt(); //setting a global
     } else if(command == "polling granularity") {
-      polling_granularity = commandData.toInt(); //setting a global.
+      //polling_granularity = commandData.toInt(); //setting a global.
     } else if(command == "logging granularity") {
       data_logging_granularity = commandData.toInt(); //setting a global.
     } else if(command == "clear latency average") {
