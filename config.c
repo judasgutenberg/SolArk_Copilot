@@ -12,7 +12,6 @@ const int sensor_id = 280; //SENSORS! -- we support these: 7410 for ADT7410, 232
 const int sensor_i2c = 0x76;
 const int consolidate_all_sensors_to_one_record = 1;
 const int device_id = the_id_in_device_table; 
-int polling_granularity = 4; //how often to poll backend in seconds, 4 makes sense
 int data_logging_granularity = 300; //how often to store data in backend, 300 makes sense
 const int connection_failure_retry_seconds = 4;
 const int connection_retry_number = 22;
