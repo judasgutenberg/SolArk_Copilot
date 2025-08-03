@@ -103,6 +103,7 @@ bool goodDataMode = false;
 uint32_t localChangeTime = 0;
 int requestNonJsonPinInfo = 1;
 uint32_t lastCommandLogId = 0;
+char * deferredCommand = "";
  
 void setup() {
   Serial.begin(115200);
@@ -811,6 +812,10 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
         if(mode=="commandout"  || outputMode == 2) {
           lastCommandLogId = 0;
         }
+        if(deferredCommand != "") {  //here is where we run commands we cannot recover from
+          //deferred command has everything we need to reboot or whatever
+          runCommandsFromNonJson(deferredCommand, true);
+        }
         outputMode = 0;
         responseBuffer = "";
       }
@@ -866,7 +871,7 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
           } 
           if(lastCommandLogId == 0) {
             lastCommandLogId = strtoul(serverCommandParts[2].c_str(), NULL, 10);
-            runCommandsFromNonJson((char *)("!" + serverCommandParts[1]).c_str());
+            runCommandsFromNonJson((char *)("!" + serverCommandParts[1]).c_str(), false);
           }
         }
         receivedDataJson = true;
@@ -874,7 +879,7 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
       } else if(retLine.charAt(0) == '!') { //it's a command, so an exclamation point seems right
         //Serial.print("COMMAND: ");
         printLine(retLine);
-        runCommandsFromNonJson((char *)retLine.c_str());
+        runCommandsFromNonJson((char *)retLine.c_str(), false);
         break;         
       } else {
       }
@@ -884,7 +889,7 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
   clientGet.stop();
 }
 
-void runCommandsFromNonJson(char * nonJsonLine){
+void runCommandsFromNonJson(char * nonJsonLine, bool deferred){
   //can change the default values of some config data for things like polling
   String command;
   int commandId;
@@ -905,7 +910,16 @@ void runCommandsFromNonJson(char * nonJsonLine){
   }
   if(commandId) {
     if(command == "reboot") {
-      rebootEsp();
+      //can't do this here, so we defer it!
+      if(!deferred) {
+        nonJsonLine--; //get the ! back at the beginning
+        size_t len = strlen(nonJsonLine);
+        deferredCommand = new char[len + 1];  // +1 for null terminator
+        strcpy(deferredCommand, nonJsonLine);
+        textOut("Rebooting... \n");
+      } else {
+         rebootEsp();
+      }
     } else if(command == "one pin at a time") {
       //onePinAtATimeMode = (boolean)commandData.toInt(); //setting a global.
     } else if(command == "sleep seconds per loop") {
@@ -1271,7 +1285,7 @@ String urlEncode(String str, bool minimizeImpact) {
   return encodedString;
 }
 
-String joinValsOnDelimiter(long vals[], String delimiter, int numberToDo) {
+String joinValsOnDelimiter(uint32_t vals[], String delimiter, int numberToDo) {
   String out = "";
   for(int i=0; i<numberToDo; i++){
     out = out + (String)vals[i];
