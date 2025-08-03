@@ -60,8 +60,8 @@ int changeSourceId = 0;
 String goodData;
 String dataToDisplay;
 String deviceName = "";
-long lastDataLogTime = 0;
-long connectionFailureTime;
+uint32_t lastDataLogTime = 0;
+uint32_t connectionFailureTime;
 bool connectionFailureMode = false;
 ESP8266WebServer server(80); //Server on port 80
 SoftwareSerial feedbackSerial(3, 1);
@@ -84,6 +84,7 @@ long latencyCount = 0;
 bool debug = false;
 uint8_t outputMode = 0;
 String responseBuffer = "";
+uint32_t wifiOnTime = 0;
 
 SimpleMap<String, int> *pinMap = new SimpleMap<String, int>([](String &a, String &b) -> int {
   if (a == b) return 0;      // a and b are equal
@@ -99,8 +100,9 @@ bool glblRemote = false;
 
 int totalSerialChars = 0;
 bool goodDataMode = false;
-long localChangeTime = 0;
+uint32_t localChangeTime = 0;
 int requestNonJsonPinInfo = 1;
+uint32_t lastCommandLogId = 0;
  
 void setup() {
   Serial.begin(115200);
@@ -470,7 +472,7 @@ void loop() {
   
   char incomingByte = ' ';
   String startValidIndication = "MB_real data,seg_cnt:3\r\r";
-  long nowTime = millis();
+  uint32_t nowTime = millis();
 
   if((nowTime - lastDataLogTime)/1000 > 1000 || (lastDataLogTime > nowTime && lastDataLogTime >0)){
     //if we overflow millis() or it's been more than 1000 seconds since communication, reboot ESP
@@ -571,9 +573,10 @@ void loop() {
       wiFiConnect();
     }
   }
-  
-  if(responseBuffer != "") {
-    sendRemoteData(responseBuffer, "commandout", true);
+
+  if(lastCommandLogId > 0 || responseBuffer != "") {
+    String stringToSend = responseBuffer + "\n" + lastCommandLogId;
+    sendRemoteData(stringToSend, "commandout", true);
   }
   
   timeClient.update();
@@ -666,6 +669,7 @@ void wiFiConnect() {
     wiFiSeconds++;
 
   }
+  uint32_t wifiOnTime = 0;
   Serial.println("");
   Serial.print("Connected to ");
   Serial.println(wifi_ssid);
@@ -804,6 +808,9 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
         lastDataLogTime = millis();
         canSleep = true;  //canSleep is a global and will not be set until all the tasks of the device are finished.
         //also we can switch outputMode to 0 and clear responseBuffer
+        if(mode=="commandout"  || outputMode == 2) {
+          lastCommandLogId = 0;
+        }
         outputMode = 0;
         responseBuffer = "";
       }
@@ -857,7 +864,10 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
             //Serial.print("COMMAND (beside pin data): ");
             //Serial.println(serverCommandParts[1]);
           } 
-          runCommandsFromNonJson((char *)("!" + serverCommandParts[1]).c_str());
+          if(lastCommandLogId == 0) {
+            lastCommandLogId = strtoul(serverCommandParts[2].c_str(), NULL, 10);
+            runCommandsFromNonJson((char *)("!" + serverCommandParts[1]).c_str());
+          }
         }
         receivedDataJson = true;
         break;   
@@ -1157,7 +1167,7 @@ time_t parseDateTime(String dateTime) {
 }
 
 
-String msTimeAgo(long millisFromPast) {
+String msTimeAgo(uint32_t millisFromPast) {
   return humanReadableTimespan((uint32_t) (millis() - millisFromPast)/1000);
 }
  
@@ -1173,7 +1183,7 @@ String timeAgo(String sqlDateTime, time_t compareTo) {
 
     if (sqlDateTime.length() == 0) {
         // If an empty string is passed, use millis() for uptime
-        unsigned long uptimeSeconds = millis() / 1000;
+        uint32_t uptimeSeconds = millis() / 1000;
         nowTime = uptimeSeconds;
         past = 0;
     } else {
