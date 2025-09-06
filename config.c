@@ -1,11 +1,11 @@
-
+b
 const char* wifi_ssid = "your_wifi_ssid"; //mine was Moxee Hotspot83_2.4G
 const char* wifi_password = "your_wifi_password";
 const char* storage_password = "your_secret"; //to ensure someone doesn't store bogus data on your server. should match value in the storage_password column in you tenant record
 const unsigned long long encryption_scheme = 0x6894567AF062C202; 
 //data posted to remote server so we can keep a historical record
-//url will be in the form: http://your-server.com:80/weather/data.php?data=
-const char* url_get = "/your_directory/data.php";
+//url will be in the form: http://your-server.com:80/weather/server.php?data=
+const char* url_get = "/your_directory/server.php"; //used to be data.php. you will need that (from the ESP8266 Remote Control Repo) if you use the old version of this .ino
 const char* host_get = "your-domain.com";
 const char* sensor_config_string = "";// "14*-1*53*5*41*NULL*distance*5*1|0*-1*1*3*NULL*NULL*gassy*4*1";; //an easy way to specify multiple sensors. the format is: dataPin*powerPin*sensorType*sensorSubType*i2c_address*device_feature_id*name*ordinal_of_overwrite*consolidateAllSensorsToOneRecord|next_sensor...
 const int sensor_id = 280; //SENSORS! -- we support these: 7410 for ADT7410, 2320 for AHT20, 75 for LM75, 85 for BMP085, 180 for BMP180, 2301 for DHT 2301, 680 for BME680.  0 for no sensor. Multiple sensors are possible.
@@ -37,3 +37,4 @@ const int ir_pin = 14; //set to the value of an actual data pin if you want to s
 const int ina219_address = 0x40; //set to -1 if you have no power voltage to monitor
 const int ina219_address_a = -1; //set to -1 if you have no power voltage a to monitor
 const int ina219_address_b = -1; //set to -1 if you have no power voltage b to monitor
+
