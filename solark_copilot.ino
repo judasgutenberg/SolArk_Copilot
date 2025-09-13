@@ -86,6 +86,7 @@ bool debug = false;
 uint8_t outputMode = 0;
 String responseBuffer = "";
 uint32_t wifiOnTime = 0;
+static unsigned long lastPet = 0;
 
 SimpleMap<String, int> *pinMap = new SimpleMap<String, int>([](String &a, String &b) -> int {
   if (a == b) return 0;      // a and b are equal
@@ -479,6 +480,18 @@ void loop() {
     //if we overflow millis() or it's been more than 1000 seconds since communication, reboot ESP
     rebootEsp();
   }
+  
+
+  if (slave_pet_watchdog_command > 0 && (nowTime - lastPet) > 20000) { 
+    Wire.beginTransmission(slave_i2c);
+    Wire.write((uint8_t)slave_pet_watchdog_command);  // command ID for "pet watchdog"
+    Wire.endTransmission();
+    yield();
+    //feedbackPrint("pet" + "\n");
+    lastPet = nowTime;
+  }
+  
+  
   if(!goodDataMode) {
     for(int i=0; i <4; i++) { //doing this four times here is helpful to make web service reasonably responsive. once is not enough
       server.handleClient();
@@ -535,7 +548,7 @@ void loop() {
         transmissionString = transmissionString + "|||";
         //extraInfo:
         transmissionString = transmissionString + "|";
-        if(ipAddress.indexOf(' ') > 0) { //i was getting HTML haeader info mixed in for some reason
+        if(ipAddress.indexOf(' ') > 0) { //i was getting HTML header info mixed in for some reason
           ipAddress = ipAddress.substring(0, ipAddress.indexOf(' '));
         }
         String ipAddressToUse = ipAddress;
@@ -817,7 +830,9 @@ void sendRemoteData(String datastring, String mode, bool includesWeatherData){
       retLine.trim();
       if(retLine.indexOf("\"error\":") < 0 && includesWeatherData && (retLine.charAt(0)== '{' || retLine.charAt(0)== '*' || retLine.charAt(0)== '|')) {
        
-        lastDataLogTime = millis();
+        if(mode != "getInitialDeviceInfo") {
+          lastDataLogTime = millis();
+        }
         canSleep = true;  //canSleep is a global and will not be set until all the tasks of the device are finished.
         //also we can switch outputMode to 0 and clear responseBuffer
         if(mode=="commandout"  || outputMode == 2) {
