@@ -495,6 +495,7 @@ void loop() {
   if(!goodDataMode) {
     for(int i=0; i <4; i++) { //doing this four times here is helpful to make web service reasonably responsive. once is not enough
       server.handleClient();
+      yield();
     }
     //lookupLocalPowerData();
  
@@ -504,7 +505,7 @@ void loop() {
   if (Serial.available() > 0) {
     // read the incoming byte:
     incomingByte = Serial.read();
-
+    yield();
     serialContent += incomingByte;
     totalSerialChars++;
     if(totalSerialChars > 5000) {
@@ -605,6 +606,7 @@ void loop() {
   }
   
   timeClient.update();
+  yield();
 }
 
 void sleepForSeconds(int seconds) {
