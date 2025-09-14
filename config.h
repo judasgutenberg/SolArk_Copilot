@@ -35,3 +35,6 @@ extern const int ir_pin;
 extern const int ina219_address;
 extern const int ina219_address_a;
 extern const int ina219_address_b;
+
+extern const int slave_i2c;
+extern const int slave_pet_watchdog_command;
