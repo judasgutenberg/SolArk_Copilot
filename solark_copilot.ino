@@ -483,11 +483,13 @@ void loop() {
   
 
   if (slave_pet_watchdog_command > 0 && (nowTime - lastPet) > 20000) { 
+  
     Wire.beginTransmission(slave_i2c);
     Wire.write((uint8_t)slave_pet_watchdog_command);  // command ID for "pet watchdog"
     Wire.endTransmission();
     yield();
-    //feedbackPrint("pet" + "\n");
+    //feedbackPrint("pet\n");
+   
     lastPet = nowTime;
   }
   
@@ -961,6 +963,15 @@ void runCommandsFromNonJson(char * nonJsonLine, bool deferred){
     } else if(command == "clear latency average") {
       latencyCount = 0;
       latencySum = 0;
+
+
+    } else if(command == "get watchdog info") {
+      long ms      = requestLong(slave_i2c, 129); // millis
+      long lastReboot = requestLong(slave_i2c, 130); // last watchdog reboot time
+      long rebootCount  = requestLong(slave_i2c, 131); // reboot count
+      long lastWePetted  = requestLong(slave_i2c, 132);
+      long lastPetAtBite  = requestLong(slave_i2c, 133);
+      textOut("Watchdog millis: " + String(ms) + "; Last reboot at: " + String(lastReboot) + " (" + msTimeAgo(ms, lastReboot) + "); Reboot count: " + String(rebootCount) + "; Last petted: " + String(lastWePetted) + " (" + msTimeAgo(ms, lastWePetted) + "); Bit " + String(lastPetAtBite) + " seconds after pet\n"); 
     } else if (command ==  "get uptime") {
       textOut("Last booted: " + timeAgo("") + "\n");
     } else if (command ==  "get wifi uptime") {
@@ -1211,6 +1222,10 @@ time_t parseDateTime(String dateTime) {
 
 String msTimeAgo(uint32_t millisFromPast) {
   return humanReadableTimespan((uint32_t) (millis() - millisFromPast)/1000);
+}
+
+String msTimeAgo(uint32_t base, uint32_t millisFromPast) {
+  return humanReadableTimespan((uint32_t) (base - millisFromPast)/1000);
 }
  
 // Overloaded version: Uses NTP time as the default comparison
@@ -1649,4 +1664,22 @@ void feedbackPrint(String value){
 void printLine(String value){
  //normally commented-out
  //Serial.println(value);
+}
+
+long requestLong(byte slaveAddress, byte command) {
+  Wire.beginTransmission(slaveAddress);
+  Wire.write(command);    // send the command
+  Wire.endTransmission();
+
+  Wire.requestFrom(slaveAddress, 4);
+  long value = 0;
+  byte buffer[4];
+  int i = 0;
+  while (Wire.available() && i < 4) {
+    buffer[i++] = Wire.read();
+  }
+  for (int j = 0; j < i; j++) {
+    value |= ((long)buffer[j] << (8 * j));
+  }
+  return value;
 }
