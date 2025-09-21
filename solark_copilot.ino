@@ -30,7 +30,6 @@
 #include <Adafruit_BMP085.h>
 #include <Temperature_LM75_Derived.h>
 #include <Adafruit_BMP280.h>
-#include <Wire.h>
 
 #include "index.h" //Our HTML webpage contents with javascriptrons
 
@@ -966,12 +965,28 @@ void runCommandsFromNonJson(char * nonJsonLine, bool deferred){
 
 
     } else if(command == "get watchdog info") {
-      long ms      = requestLong(slave_i2c, 129); // millis
-      long lastReboot = requestLong(slave_i2c, 130); // last watchdog reboot time
-      long rebootCount  = requestLong(slave_i2c, 131); // reboot count
-      long lastWePetted  = requestLong(slave_i2c, 132);
-      long lastPetAtBite  = requestLong(slave_i2c, 133);
-      textOut("Watchdog millis: " + String(ms) + "; Last reboot at: " + String(lastReboot) + " (" + msTimeAgo(ms, lastReboot) + "); Reboot count: " + String(rebootCount) + "; Last petted: " + String(lastWePetted) + " (" + msTimeAgo(ms, lastWePetted) + "); Bit " + String(lastPetAtBite) + " seconds after pet\n"); 
+      if(slave_i2c > 0) {
+        long ms      = requestLong(slave_i2c, 129); // millis
+        long lastReboot = requestLong(slave_i2c, 130); // last watchdog reboot time
+        long rebootCount  = requestLong(slave_i2c, 131); // reboot count
+        long lastWePetted  = requestLong(slave_i2c, 132);
+        long lastPetAtBite  = requestLong(slave_i2c, 133);
+        textOut("Watchdog millis: " + String(ms) + "; Last reboot at: " + String(lastReboot) + " (" + msTimeAgo(ms, lastReboot) + "); Reboot count: " + String(rebootCount) + "; Last petted: " + String(lastWePetted) + " (" + msTimeAgo(ms, lastWePetted) + "); Bit " + String(lastPetAtBite) + " seconds after pet\n"); 
+      }
+    } else if(command == "get watchdog data") {
+      if(slave_i2c > 0) {
+        long ms      = requestLong(slave_i2c, 129); // millis
+        long lastReboot = requestLong(slave_i2c, 130); // last watchdog reboot time
+        long rebootCount  = requestLong(slave_i2c, 131); // reboot count
+        long lastWePetted  = requestLong(slave_i2c, 132);
+        long lastPetAtBite  = requestLong(slave_i2c, 133);
+        textOut( String(ms) + "|" + String(lastReboot) + "|" + String(rebootCount) + "|" + String(lastWePetted) + "|" + String(lastPetAtBite) + "\n");
+      } 
+    } else if(command == "watchdog reboot") {
+      if(slave_i2c > 0) {
+        requestLong(slave_i2c, 134);
+        textOut("Slave performing master reboot...\n");
+      }
     } else if (command ==  "get uptime") {
       textOut("Last booted: " + timeAgo("") + "\n");
     } else if (command ==  "get wifi uptime") {
