@@ -541,8 +541,10 @@ void loop() {
         if(latencyCount > 0) {
             transmissionString = transmissionString + (1000 * latencySum)/latencyCount;
         };
+        
         transmissionString = transmissionString + "*****"; //this is where latitude*longitude*elevation*velocity*uncertainty go.
-                
+        //also include slave timing data!
+        transmissionString = transmissionString + "*" + slaveData();     
         
         //powerData:
         transmissionString = transmissionString + "|" + "*" + measuredVoltage + "*" + measuredAmpage;
@@ -975,12 +977,7 @@ void runCommandsFromNonJson(char * nonJsonLine, bool deferred){
       }
     } else if(command == "get watchdog data") {
       if(slave_i2c > 0) {
-        long ms      = requestLong(slave_i2c, 129); // millis
-        long lastReboot = requestLong(slave_i2c, 130); // last watchdog reboot time
-        long rebootCount  = requestLong(slave_i2c, 131); // reboot count
-        long lastWePetted  = requestLong(slave_i2c, 132);
-        long lastPetAtBite  = requestLong(slave_i2c, 133);
-        textOut( String(ms) + "|" + String(lastReboot) + "|" + String(rebootCount) + "|" + String(lastWePetted) + "|" + String(lastPetAtBite) + "\n");
+        textOut(slaveData() + "\n");
       } 
     } else if(command == "watchdog reboot") {
       if(slave_i2c > 0) {
@@ -1097,6 +1094,7 @@ void handleWeatherData() {
   server.send(200, "text/plain", transmissionString); //Send values only to client ajax request
 }
 
+
 //if the backend sends too much text data at once, it is likely to get gzipped, which is hard to deal with on a microcontroller with limited resources
 //so a better strategy is to send double-delimited data instead of JSON, with data consistently in known ordinal positions
 //thereby making the data payloads small enough that the server never gzips them
@@ -1176,9 +1174,19 @@ void setLocalHardwareToServerStateFromNonJson(char * nonJsonLine){
     
   }
   pinTotal = foundPins;
-}
+} 
 
 ///////////////////////////////////////////////
+
+String slaveData() {
+    long ms      = requestLong(slave_i2c, 129); // millis
+    long lastReboot = requestLong(slave_i2c, 130); // last watchdog reboot time
+    long rebootCount  = requestLong(slave_i2c, 131); // reboot count
+    long lastWePetted  = requestLong(slave_i2c, 132);
+    long lastPetAtBite  = requestLong(slave_i2c, 133);
+    return String(ms) + "*" + String(lastReboot) + "*" + String(rebootCount) + "*" + String(lastWePetted) + "*" + String(lastPetAtBite);
+}
+
 void rebootEsp() {
   feedbackSerial.print("Rebooting ESP");
   ESP.restart();
