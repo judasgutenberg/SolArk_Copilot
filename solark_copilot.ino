@@ -940,7 +940,12 @@ void runCommandsFromNonJson(char * nonJsonLine, bool deferred){
     outputMode = 2;
   }
   if(commandId) {
-    if(command == "reboot") {
+    if (command == "reboot slave") {
+      if(slave_i2c > 0) {
+        requestLong(slave_i2c, 128);
+        textOut("Slave rebooted\n");
+      }
+    } else if(command.indexOf("reboot") > -1){
       //can't do this here, so we defer it!
       if(!deferred) {
         nonJsonLine--; //get the ! back at the beginning
@@ -949,7 +954,13 @@ void runCommandsFromNonJson(char * nonJsonLine, bool deferred){
         strcpy(deferredCommand, nonJsonLine);
         textOut("Rebooting... \n");
       } else {
+        if(command.indexOf("watchdog") > -1){
+          if(slave_i2c > 0) {
+            requestLong(slave_i2c, 134);
+          }
+        } else {
          rebootEsp();
+        }
       }
     } else if(command == "one pin at a time") {
       //onePinAtATimeMode = (boolean)commandData.toInt(); //setting a global.
@@ -979,11 +990,7 @@ void runCommandsFromNonJson(char * nonJsonLine, bool deferred){
       if(slave_i2c > 0) {
         textOut(slaveData() + "\n");
       } 
-    } else if(command == "watchdog reboot") {
-      if(slave_i2c > 0) {
-        requestLong(slave_i2c, 134);
-        textOut("Slave performing master reboot...\n");
-      }
+
     } else if (command ==  "get uptime") {
       textOut("Last booted: " + timeAgo("") + "\n");
     } else if (command ==  "get wifi uptime") {
