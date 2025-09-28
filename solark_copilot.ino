@@ -217,7 +217,7 @@ void startWeatherSensors(int sensorIdLocal, int sensorSubTypeLocal, int i2c, int
     }
   } else if(sensorIdLocal == 680) {
     Serial.print(F("Initializing BME680 sensor...\n"));
-    while (!BME680[objectCursor].begin(uint8_t)i2c)) {  // Start B DHTME680 using I2C, use first device found
+    while (!BME680[objectCursor].begin((uint8_t)i2c)) {  // Start B DHTME680 using I2C, use first device found
       Serial.print(F(" - Unable to find BME680. Trying again in 5 seconds.\n"));
       delay(5000);
     }  // of loop until device is located
