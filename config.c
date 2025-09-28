@@ -40,4 +40,5 @@ const int ina219_address_b = -1; //set to -1 if you have no power voltage b to m
 
 
 const int slave_i2c = 20;
-const int slave_pet_watchdog_command = 203; //sets the watchdog to require petting every 1000 seconds and makes sure to pet.  202 is once every 100 seconds and 204 is once every 10000 seconds
+int slave_pet_watchdog_command = 203; //sets the watchdog to require petting every 1000 seconds and makes sure to pet.  202 is once every 100 seconds and 204 is once every 10000 seconds
+
