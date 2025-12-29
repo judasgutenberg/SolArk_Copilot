@@ -1,3 +1,6 @@
+NOTE: solark_copilot_october2025.ino was supplanted in October 2025 by a change of data format activated by a software update.  Since then, I have been working out the way to grab data from the new format. 
+
+
 This device is designed to connect to the serial port of the WiFi dongle attached to a SolArk inverter. (Pictured below is that dongle with the plastic housing removed and three wires -- white: receive, black: ground, green: transmit -- attached to its serial port.) Doing this allows it to intercept the important data (battery charge percentage, battery drain & charge wattage, load wattage, solar wattage, and grid wattage) at fine granularity (every ten seconds or so).
 
 ![alt text](dongle_serial.jpg?raw=true)
