@@ -1,5 +1,8 @@
 <?php
-
+//this is a PHP version of the parser used in the Arduino I2C Slave With Commands Repository:
+//https://github.com/judasgutenberg/Arduino_I2C_Slave_With_Commands
+//it uses configuration strings in the $css[] array to specify where values are found
+//and a bitfield in $cis["PARSING_STYLE"] to control the details of what the values in the configuration strings mean
 /* ============================================================
  * Compatibility helpers
  * ============================================================ */
