@@ -30,7 +30,7 @@ $cis['PARSING_STYLE'] = 0;   // known-good baseline
 
 $file = __DIR__ . '/solarktestdata.txt';
 $apcuKey = 'solark_line_offset';
-$linesToScan = 500;
+$linesToScan = 22;
 
 if (!is_readable($file)) {
     http_response_code(500);
