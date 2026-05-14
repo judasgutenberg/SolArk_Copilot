@@ -1,44 +1,90 @@
-b
-const char* wifi_ssid = "your_wifi_ssid"; //mine was Moxee Hotspot83_2.4G
-const char* wifi_password = "your_wifi_password";
-const char* storage_password = "your_secret"; //to ensure someone doesn't store bogus data on your server. should match value in the storage_password column in you tenant record
-const unsigned long long encryption_scheme = 0x6894567AF062C202; 
-//data posted to remote server so we can keep a historical record
-//url will be in the form: http://your-server.com:80/weather/server.php?data=
-const char* url_get = "/your_directory/server.php"; //used to be data.php. you will need that (from the ESP8266 Remote Control Repo) if you use the old version of this .ino
-const char* host_get = "your-domain.com";
-const char* sensor_config_string = "";// "14*-1*53*5*41*NULL*distance*5*1|0*-1*1*3*NULL*NULL*gassy*4*1";; //an easy way to specify multiple sensors. the format is: dataPin*powerPin*sensorType*sensorSubType*i2c_address*device_feature_id*name*ordinal_of_overwrite*consolidateAllSensorsToOneRecord|next_sensor...
-const int sensor_id = 280; //SENSORS! -- we support these: 7410 for ADT7410, 2320 for AHT20, 75 for LM75, 85 for BMP085, 180 for BMP180, 2301 for DHT 2301, 680 for BME680.  0 for no sensor. Multiple sensors are possible.
-const int sensor_i2c = 0x76;
-const int consolidate_all_sensors_to_one_record = 1;
-const int device_id = the_id_in_device_table; 
-int data_logging_granularity = 300; //how often to store data in backend, 300 makes sense
-const int connection_failure_retry_seconds = 4;
-const int connection_retry_number = 22;
+//this is a sample config.cpp for the ESP8266 Remote, see:
+//https://github.com/judasgutenberg/Esp8266_RemoteControl
+#include "config.h"
+#include "globals.h"
 
-const int granularity_when_in_connection_failure_mode = 5; //40 was too little time for everything to come up and start working reliably, at least with my sketchy cellular connection
-const int hotspot_limited_time_frame = 340; //seconds
+char* cs[CONFIG_STRING_COUNT]; //used for string configurations
+int ci[CONFIG_TOTAL_COUNT]; //used for int configurations
 
-int deep_sleep_time_per_loop = 0;  //in seconds. saves energy.  set to zero if unneeded. GPIO16/D0 needs to be conneted to RST in hardware first. can be changed remotely
-int light_sleep_time_per_loop = 0;
+char* css[CONFIG_SLAVE_STRING_COUNT]; // string slave configuration values
+int cis[CONFIG_SLAVE_TOTAL_COUNT];    // integer slave configuration values
 
-//if you are using a DHT hygrometer/temperature probe, these values will be important
-//particularly if you reflashed a MySpool temperature probe (https://myspool.com/) with custom firmware
-//on those, the sensorData is 14 and sensorPower is 12
-const int sensor_data_pin = -1; 
-const int sensor_power_pin = 12;
-// #define dhType DHT11 // DHT 11
-// #define dhType DHT22 // DHT 22, AM2302, AM2321
-const int sensor_sub_type = 21; // DHT 21, AM2301
+void initMasterDefaults() {
+  cs[STORAGE_PASSWORD] = "supersecret";  // must match storage_password in backend
+  cs[URL_GET] = "/weather/server.php";
+  cs[HOST_GET] = "yourserver.com";
+  cs[ENCRYPTION_SCHEME] = "71FF867AC7733913"; // 16-char hex string
+  cs[SENSOR_CONFIG_STRING] = "0*-1*1*99*NULL*NULL*12v*15*1"; // "14*-1*2301*11*0*NULL*stank*1";
+  cs[PINS_TO_START_LOW] = ""; //comma-delimited integers of pins to start low
+  cs[WIFI_SSID] = "your_ssid";
+  cs[WIFI_PASSWORD] = "secret";
+  cs[WIFI_SSID_1] = "another_ssid";
+  cs[WIFI_PASSWORD_1] = "";
+  cs[WIFI_SSID_2] = "yet_another_ssid";
+  cs[WIFI_PASSWORD_2] = "";
+  
+  ci[SENSOR_ID] = 680;//280;          // e.g. 2301 = DHT2301
+  ci[SENSOR_I2C] = 0x77;
+  ci[CONSOLIDATE_ALL_SENSORS_TO_ONE_RECORD] = 1;
+  ci[DEVICE_ID] = 16;
+  ci[POLLING_GRANULARITY] = 4;
+  ci[DATA_LOGGING_GRANULARITY] = 300;
+  ci[OFFLINE_LOG_GRANULARITY] = 100;
+  ci[WIFI_TIMEOUT] = 100;
+  ci[OFFLINE_RECONNECT_INTERVAL] = 20;
+  ci[FRAM_INDEX_SIZE] = 256;
+  ci[FRAM_LOG_TOP] = 28672;
+  ci[CONNECTION_FAILURE_RETRY_SECONDS] = 4;
+  ci[CONNECTION_RETRY_NUMBER] = 22;
+  ci[GRANULARITY_WHEN_IN_MOXEE_PHASE_0] = 3;
+  ci[GRANULARITY_WHEN_IN_MOXEE_PHASE_1] = 17;
+  ci[NUMBER_OF_HOTSPOT_REBOOTS_OVER_LIMITED_TIMEFRAME_BEFORE_ESP_REBOOT] = 4;
+  ci[HOTSPOT_LIMITED_TIME_FRAME] = 340;
+  ci[MOXEE_POWER_SWITCH] = 0;
+  ci[DEEP_SLEEP_TIME_PER_LOOP] = 0;
+  ci[LIGHT_SLEEP_TIME_PER_LOOP] = 0;
+  ci[SENSOR_DATA_PIN] = -1;
+  ci[SENSOR_POWER_PIN] = -1;
+  ci[SENSOR_SUB_TYPE] = 21;
+  ci[IR_PIN] = 0;
+  ci[INA219_ADDRESS] = 0x40;//0x40;
+  ci[FRAM_ADDRESS] = 0;//0x50;
+  ci[RTC_ADDRESS] = 0;//0x68;
+  ci[SLAVE_I2C] = 20;
+  ci[SLAVE_PET_WATCHDOG_COMMAND] = 203;
+  ci[DEBUG] = 2;
+  ci[POLLING_SKIP_LEVEL] = 50;
+  ci[LOCAL_WEB_SERVICE_RESPONSIVENESS] = 1;
+  ci[BAUD_RATE_LEVEL] = 9;
+  ci[CONFIG_PERSIST_METHOD] = 0;
+  ci[SEND_TELEMETRY_TYPE_IN_RESERVED] = 1;
+  ci[ANOMALY_LOG_LEVEL] = 1;
 
-const char pins_to_start_low[] = {12, 13, -1}; //so when the device comes up it doesn't immediately turn on attached devices
+  //these were originally for the BE680 but for other sensors that take a complex configuration, these could be made params for those as well:
+  ci[SENSOR_PARAM_1] = 5; // for the first three: 5 is  BME68X_OS_16X, 4 is 8X, 3 is 2X, 1 is 1X, 0 is none
+  ci[SENSOR_PARAM_2] = 5;
+  ci[SENSOR_PARAM_3] = 5;
+  ci[SENSOR_PARAM_4] = 1; //should be in the range of 0 for no filter to 7 for BME68X_FILTER_SIZE_127                    
+  ci[SENSOR_PARAM_5] = 0; //0 for 50 degrees, 34 for 100 degrees, 100 for 200, 233 for 400 degrees, 300 for 500 degrees
+  ci[SENSOR_PARAM_6] = 0x59; //0x59 is 89 ms, 200 is 200 ms
+  
+  ci[SERIAL_SWAP] = 1;
+  ci[SERIAL_DEBUG_LEVEL] = 0;
+  ci[SERIAL_FOR_COMMANDS_ONLY] = 0;
+  ci[SERIAL_BUFFER] = 2048;
+  ci[SERIAL_PARSE_MODE] = 0;
+}
 
-const int ir_pin = 14; //set to the value of an actual data pin if you want to send data via ir from your controller on occasion
-const int ina219_address = 0x40; //set to -1 if you have no power voltage to monitor
-const int ina219_address_a = -1; //set to -1 if you have no power voltage a to monitor
-const int ina219_address_b = -1; //set to -1 if you have no power voltage b to monitor
+void initSlaveDefaults() {                                      
+  css[0] = "Characteristic #2;0x3ffbb61c;0x3ffbb5fc;4;4;6;7;8;9;10;11;0x3ffbb60c;0;1";
+  css[1] = "Characteristic #7;I (318800102);0x3ffbb5bc;6;7";
+  css[2] = "Characteristic #9;I (28318992);0x3ffbb64c;0;1";
 
-
-const int slave_i2c = 20;
-int slave_pet_watchdog_command = 203; //sets the watchdog to require petting every 1000 seconds and makes sure to pet.  202 is once every 100 seconds and 204 is once every 10000 seconds
-
+  cis[SLAVE_POWER_MODE] = 2;
+  cis[SLAVE_PARSE_MODE] = 0;
+  cis[SLAVE_BAUD_RATE_LEVEL] = 9;
+  cis[SLAVE_I2C_ADDRESS] = 0;
+  cis[SLAVE_REBOOT_PIN] = 7;
+  cis[SLAVE_SERIAL_MODE] = 2;
+ 
+}
