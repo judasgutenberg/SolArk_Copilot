@@ -19,7 +19,15 @@ The first step in getting this to work is to carefully split open your SolArk Wi
   ci[SERIAL_PARSE_MODE] = 0; 
 ```
 
-  Additionally, you will need to place a parse configuration file with the name serialparser.cfg in the root of a LittleFS file system on that ESP8266.  One way to do that is to fire up the flashed ESP8266 and send the command "download http://asecular.com/serialparser.cfg," which will download a known good copy to your ESP8266.
+  Additionally, you will need to place a parse configuration file with the name serialparser.cfg in the root of a LittleFS file system on that ESP8266.  One way to do that is to fire up the flashed ESP8266 and send the command "download http://asecular.com/serialparser.cfg," which will download a known good copy to your ESP8266.  The contents of this file looks something like:
+
+```
+Characteristic #2;0x3ffbb61c;0x3ffbb5fc;4;5;6;7;8;9;10;11;2;3;0x3ffbb60c;0;1
+Characteristic #7;I (318800102);0x3ffbb5bc;6;7
+Characteristic #9;I (28318992);0x3ffbb64c;0;1
+```
+  
+  
 
 Then, when configuring the device with the assigned device_id (from config.cpp, whatever you set it for there) for this ESP8266, you should place a proper parser data disposition JSON object in its parsed data disposition. This is the JSON that I came up with that works for SolArk inverters:
 
