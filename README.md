@@ -15,7 +15,7 @@ The first step in getting this to work is to carefully split open your SolArk Wi
   ci[SERIAL_SWAP] = 1; 
   ci[SERIAL_DEBUG_LEVEL] = 0; 
   ci[SERIAL_FOR_COMMANDS_ONLY] = 0; 
-  ci[SERIAL_BUFFER] = 2048;<br/>
+  ci[SERIAL_BUFFER] = 2048; 
   ci[SERIAL_PARSE_MODE] = 0; 
 ```
 
