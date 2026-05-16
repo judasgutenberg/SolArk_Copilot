@@ -1,6 +1,6 @@
 
 
-This is a system for capturing and logging data of interest found in communications between a SolArk inverter and its WiFi dongle.  Originally this system was entirely hardcoded based on a careful analysis of the serial data.  For historical reasons, that version can be found in solark_copilot_october2025.ino or by wading through the old commits if you prefer doing things that way.
+This is a system for capturing and logging data of interest found in communications between a SolArk inverter and its WiFi dongle.  Originally this system was entirely hardcoded based on a careful analysis of the serial data observed streaming between a SolArk inverter and its WiFi dongle.  For historical reasons, that version can be found in solark_copilot_october2025.ino or by wading through the old commits if you prefer doing things that way.
 
 Later, though, SolArk changed their data format in an unexpected software update in October of 2025. This led me to build a generic serial stream parsing system and incorporated it into my ESP8266_Remote system (see https://github.com/judasgutenberg/Esp8266_RemoteControl). When configured correctly, this will automatically parse serial data arriving on the ESP8266's swapped serial RX pin and place it in the correct columns in the inverter_log table.
 
